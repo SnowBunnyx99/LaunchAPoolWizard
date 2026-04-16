@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import CustomWalletBtn from './components/CustomWalletBtn';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, PublicKey } from '@solana/web3.js';
-import { createRefiPoolSDK } from './sdk';
+import { Connection } from '@solana/web3.js';
+import BN from 'bn.js';
+import { createRefiPoolSDK, sleep, USDC_MINT } from './sdk';
+import { useInitProgramVolt } from './volt/initProgram';
+import { toast } from 'react-toastify';
 
 type Pool = {
   name: string;
@@ -18,7 +21,7 @@ type Pool = {
 };
 
 export default function ReFiApp() {
-  const [walletConnected, setWalletConnected] = useState(false);
+  const program = useInitProgramVolt().initProgram(); // initialize Anchor program
   const [step, setStep] = useState<1 | 2 | 'deploy'>(1);
   const [view, setView] = useState<'wizard' | 'dashboard'>('wizard');
 
@@ -37,6 +40,7 @@ export default function ReFiApp() {
     name: 'SolarYield Pool',
     symbol: 'sYLD',
     apy: 6,
+    poolId: 1,
   });
 
   const [deploying, setDeploying] = useState(false);
@@ -45,13 +49,12 @@ export default function ReFiApp() {
   // DEPLOY
   // =====================
   const handleDeploy = async () => {
+
     try {
       if (!publicKey || !signTransaction) {
         throw new Error('Connect wallet first');
       }
       const connection = new Connection('https://api.devnet.solana.com');
-
-      // ⚠️ You must already have program (Anchor)
       const sdk = createRefiPoolSDK({
         program,
         connection,
@@ -63,47 +66,40 @@ export default function ReFiApp() {
 
       setStep('deploy');
       setDeploying(true);
-
-      const usdcMint = new PublicKey(
-        'Es9vMFrzaCER...REPLACE_WITH_REAL' // devnet USDC
-      );
-
       const config = {
         adminAuthority: publicKey,
         oracleAuthority: publicKey,
         feeCollector: publicKey,
-        depositFeeBps: 50,
-        withdrawalFeeBps: 50,
-        managementFeeBps: 100,
-        initialExchangeRate: 1,
-        maxTotalSupply: 1_000_000_000,
-        maxQueueSize: 100,
-      };
+        depositFeeBps: 100,    // 1%
+        withdrawalFeeBps: 200, // 2%
+        managementFeeBps: 50,  // 0.5%
+        initialExchangeRate: new BN(1000000), // 1:1
+        maxTotalSupply: new BN(0), // Unlimited
+        maxQueueSize: 20,
+        navAllocationBps: 10000, // 100% to NAV
+        poolName: sdk.toFixedBytes(form.name, 50),
+        tokenSymbol: sdk.toFixedBytes(form.symbol, 10),
+        targetApyBps: 1000,
+      }
 
-      // =====================
-      // STEP 1
-      // =====================
-      const { poolPda } = await sdk.initPool(usdcMint, config);
+      const { poolPda } = await sdk.initPool(USDC_MINT, form.poolId, config);
+      console.log('Pool PDA:', poolPda);
+      debugger;
+      await sleep(4000); // wait for transactions to confirm
+      await sdk.initPoolStep2(USDC_MINT, poolPda);
 
-      // =====================
-      // STEP 2
-      // =====================
-      await sdk.initPoolStep2(usdcMint, poolPda);
 
-      // =====================
-      // STEP 3
-      // =====================
       await sdk.initWallets(
         poolPda,
-        usdcMint,
-        publicKey, // navWallet
-        publicKey  // navWalletUsdc
       );
 
       setDeploying(false);
 
-    } catch (err) {
-      console.error(err);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      toast.error(err?.message || 'Deployment failed');
+      setStep(1);
+      console.log(err);
       setDeploying(false);
     }
   };
@@ -148,6 +144,7 @@ export default function ReFiApp() {
   // =====================
   return (
     <div className="app">
+
       {/* TOPBAR */}
       <div className="topbar">
         <div className="logo">ReFi Hub</div>
@@ -175,22 +172,31 @@ export default function ReFiApp() {
               <div className="fr mb-5">
                 <div className="fg">
                   <label>Pool name</label>
-                  <input type="text" id="poolName" placeholder="e.g. SolarYield Pool" value="SolarYield Pool" onChange={() => { }} />
+                  <input type="text" id="poolName" placeholder="e.g. SolarYield Pool" value={form.name} onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))} />
                 </div>
                 <div className="fg">
                   <label>Token symbol</label>
-                  <input type="text" id="tokenSymbol" placeholder="e.g. sYLD" value="sYLD" className='uppercase' onChange={() => { }} />
+                  <input type="text" id="tokenSymbol" placeholder="e.g. sYLD" value={form.symbol} className='uppercase' onChange={(e) => setForm(prev => ({ ...prev, symbol: e.target.value }))} />
                   <div className="fhint">Max 6 characters</div>
                 </div>
               </div>
-              <div className="fg">
-                <label>Target APY</label>
-                <div className="iw">
-                  <input type="number" id="targetAPY" value="6" min="0.1" max="50" step="0.1" onChange={() => { }} />
-                  <span className="sf">%</span>
+              <div className="fr mb-5">
+                <div className="fg">
+                  <label>Target APY</label>
+                  <div className="iw">
+                    <input type="number" id="targetAPY" value={form.apy} min="0.1" max="50" step="0.1" onChange={(e) => setForm(prev => ({ ...prev, apy: parseFloat(e.target.value) }))} />
+                    <span className="sf">%</span>
+                  </div>
+                  <div className="fhint">Annualized target return displayed to investors</div>
                 </div>
-                <div className="fhint">Annualized target return displayed to investors</div>
+                <div className="fg">
+                  <label>Pool ID</label>
+                  <div className="iw">
+                    <input type="number" id="poolId" value={form.poolId} min="1" onChange={(e) => setForm(prev => ({ ...prev, poolId: parseInt(e.target.value) }))} />
+                  </div>
+                </div>
               </div>
+
               <div className="bg-[#F7F8FA] rounded-lg p-4 mt-5" style={{ padding: '20px' }}>
                 <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.5px] mb-2.5">
                   Fixed parameters
@@ -226,9 +232,10 @@ export default function ReFiApp() {
             <>
               <div id="step2">
                 <div className="rg">
-                  <div className="ri"><div className="rl">Pool name</div><div className="rv" id="rName"></div></div>
-                  <div className="ri"><div className="rl">Token symbol</div><div className="rv" id="rSymbol"></div></div>
-                  <div className="ri"><div className="rl">Target APY</div><div className="rv gr" id="rAPY"></div></div>
+                  <div className="ri"><div className="rl">Pool name</div><div className="rv" id="rName">{form.name}</div></div>
+                  <div className="ri"><div className="rl">Token symbol</div><div className="rv" id="rSymbol">{form.symbol}</div></div>
+                  <div className="ri"><div className="rl">Target APY</div><div className="rv gr" id="rAPY">{form.apy.toFixed(1)}%</div></div>
+                  <div className="ri"><div className="rl">Pool ID</div><div className="rv gr" id="rPoolId">{form.poolId}</div></div>
                   <div className="ri"><div className="rl">Seed PPS</div><div className="rv">$1.0000</div></div>
                   <div className="ri"><div className="rl">Base asset</div><div className="rv">USDC</div></div>
                   <div className="ri"><div className="rl">Network</div><div className="rv">Solana (Devnet)</div></div>
@@ -246,21 +253,23 @@ export default function ReFiApp() {
           {step === 'deploy' && (
             <div>
               {deploying ? (
-                <p className='text-center m-auto'>Deploying...</p>
+                <>
+                  {/* LOADING */}
+                  <div className="text-center py-12" id="dLoading">
+                    <div className="m-auto mt-5 w-10 h-10 border-2 border-gray-300 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
+
+                    <p className="text-[15px] font-semibold">
+                      Deploying your pool...
+                    </p>
+                    <p className="text-[13px] text-gray-500 mt-1.5">
+                      Confirm the transaction in your wallet
+                    </p>
+                  </div>
+                </>
               ) : (
                 <>
                   <div id="stepDeploy">
-                    {/* LOADING */}
-                    <div className="text-center py-12" id="dLoading">
-                      <div className="m-auto mt-5 w-10 h-10 border-2 border-gray-300 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
 
-                      <p className="text-[15px] font-semibold">
-                        Deploying your pool...
-                      </p>
-                      <p className="text-[13px] text-gray-500 mt-1.5">
-                        Confirm the transaction in your wallet
-                      </p>
-                    </div>
 
                     {/* SUCCESS */}
                     <div className="text-center py-12" id="dSuccess">

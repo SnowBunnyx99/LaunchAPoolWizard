@@ -1,32 +1,46 @@
 import * as anchor from '@project-serum/anchor';
-import { useAnchorWallet } from 'solana-wallets-vue';
-import { PublicKey } from '@solana/web3.js';
-import { REFI_POOL_PROGRAM_ID } from './refi-pool-sdk';
-import idl from '~/lib/res/side_vault_v3.json'; // TODO: Replace with actual idl
-import idlDevNet from '~/lib/res/ipt.json';
-import { Environments } from '~/lib/values/general.values';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { useWallet } from '@solana/wallet-adapter-react';
 
-export function initProgramVolt() {
-  try {
-    console.log('initProgramVolt start');
-    const connection = initSolanaConnection();
-    const wallet = useAnchorWallet();
-    const config = useRuntimeConfig();
-    const options = anchor.AnchorProvider.defaultOptions();
-    const provider = new anchor.AnchorProvider(connection, wallet.value!, options);
-    anchor.setProvider(provider);
-    const idlProgram =
-      config.public.ENV === Environments.prod || config.public.ENV === Environments.stg
-        ? idl
-        : idlDevNet;
-    console.log('initProgramVolt end');
-    return new anchor.Program(
-      idlProgram as anchor.Idl,
+import idlDevNet from '@/app/volt/idl.json';
+import { REFI_POOL_PROGRAM_ID } from '../sdk';
+
+export function useInitProgramVolt() {
+  const wallet = useWallet();
+
+  const initProgram = () => {
+    if (!process.env.NEXT_PUBLIC_RPC_URL) {
+      throw new Error('RPC_URL not set');
+    }
+    console.log(wallet);
+    if (!wallet.sendTransaction) {
+      throw new Error('Wallet does not support sendTransaction');
+    }
+
+    const connection = new Connection(
+      process.env.NEXT_PUBLIC_RPC_URL,
+      'confirmed'
+    );
+
+    // ✅ IMPORTANT: wallet adapter itself, not publicKey
+    const provider = new anchor.AnchorProvider(
+      connection,
+      wallet as unknown as anchor.Wallet, 
+      anchor.AnchorProvider.defaultOptions()
+    );
+
+    const program = new anchor.Program(
+      idlDevNet as anchor.Idl,
       new PublicKey(REFI_POOL_PROGRAM_ID),
       provider
     );
-  } catch (error) {
-    console.log('initProgramVolt error', error);
-    throw error;
-  }
+
+    return {
+      program,
+      connection,
+      wallet,
+    };
+  };
+
+  return { initProgram };
 }
