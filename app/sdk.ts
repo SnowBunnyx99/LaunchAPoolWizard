@@ -14,7 +14,7 @@ export const REFI_POOL_PROGRAM_ID = new PublicKey('DoCrin3rSc5wiPMaCSjBk3rN5Rnsw
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 export const USDC_MINT = new PublicKey('7TrvqwZpZyRJM67YUW8U3bfx346rhdzBYM9vcyxqXcj5');
 export const NAV_WALLET = new PublicKey('26TbGcvMErPNmihXtqa2ZCp7WvDhpthNeNnKFaUMJfuA');
-export const GENERATED_POOLS_KEY = new PublicKey('9pbtq29M9ixSCndtXj6tdWaybuknnqqU2Wz9PgQSwa6c');
+export const GENERATED_POOLS_KEY = new PublicKey('36uyNvFrV8B7b4Pg3d8Fs5QmLxDfRmCF4pef3dRcAAvf');
 let IDL: any | null = null;
 
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -360,10 +360,13 @@ export const createRefiPoolSDK = ({
       const { ata: navWalletUsdc } = (
         await getOrCreateTokenAccountIx(USDC_MINT, NAV_WALLET, wallet.publicKey)
       );
-      debugger;
+
       const iptMint = deriveIptMintPda(poolPda);
       const { ata: userUsdcAccount } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
       const { ata: userIptAccount } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
+      console.log(iptMint, userUsdcAccount.toString(), userIptAccount.toString());
+      debugger;
+      await sleep(10000);
       const tx = await program.program.methods
         .userDeposit(new BN(netUsdcAmount), new BN(minIptAmount))
         .accounts({

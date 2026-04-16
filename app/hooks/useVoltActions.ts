@@ -13,7 +13,7 @@ export interface WalletContext {
 export interface PoolContext {
   exchangeRate: number;   // already parsed
   withdrawFeeBPS: number;
-  pendingFeeReserve: PublicKey; // already parsed
+  pendingFeeReserve: PublicKey | undefined; // already parsed
 }
 
 export function useVoltActions(poolCtx: PoolContext, walletCtx: WalletContext, poolPda: PublicKey) {
@@ -51,9 +51,10 @@ export function useVoltActions(poolCtx: PoolContext, walletCtx: WalletContext, p
     setLoading(true);
 
     try {
-      if (!sdk) {
+      if (!sdk || !poolCtx.pendingFeeReserve) {
         throw new Error('SDK not initialized');
       }
+        console.log('pendingFeeREserve', poolCtx.pendingFeeReserve.toString());
       const signature = await sdk.userDeposit(
         poolPda,
         poolPda,

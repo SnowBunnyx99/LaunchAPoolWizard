@@ -56,18 +56,20 @@ export interface Pool {
   createdAt: string; // hex
   bump: number;
   walletConfig: WalletConfig;
-  pendingFeeReserve: string;
+  pendingFeeReserve: PublicKey | undefined;
   totalPendingFees: string; // hex
 }
 
 export default function ReFiApp() {
   const [poolAddress, setPoolAddress] = useState(GENERATED_POOLS_KEY.toString());
   const { initProgram } = useInitProgramVolt();
+  const [pool, setPool] = useState<Pool | null>(null);
+
   const { publicKey, signTransaction } = useWallet();
   const actions = useVoltActions({
     exchangeRate: 0,
     withdrawFeeBPS: 0,
-    pendingFeeReserve: new PublicKey(GENERATED_POOLS_KEY),
+    pendingFeeReserve: pool?.pendingFeeReserve,
   }, { publicKey, signTransaction: signTransaction || (async (tx) => tx) }, new PublicKey(poolAddress));
   const balances = useVoltBalances({ publicKey, signTransaction }, new PublicKey(poolAddress));
   const program = useMemo(() => {
@@ -76,7 +78,6 @@ export default function ReFiApp() {
   const sdk = useInitProgramSdk(program, { publicKey, signTransaction: signTransaction || (async (tx) => tx) });
   const [step, setStep] = useState<1 | 2 | 'deploy'>(1);
   const [view, setView] = useState<'wizard' | 'dashboard'>('dashboard');
-  const [pool, setPool] = useState<Pool | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -178,6 +179,7 @@ export default function ReFiApp() {
     getPoolState(program, new PublicKey(poolAddress)).then((data) => {
       console.log('On-chain pool data:', data);
       if (data) {
+        console.log('pendingFeeREserve', data?.pendingFeeReserve?.toString());
         setPool(data);
       }
     }).catch((err) => {
