@@ -12,7 +12,6 @@ export function useInitProgramVolt() {
     if (!process.env.NEXT_PUBLIC_RPC_URL) {
       throw new Error('RPC_URL not set');
     }
-    console.log(wallet);
     if (!wallet.sendTransaction) {
       throw new Error('Wallet does not support sendTransaction');
     }

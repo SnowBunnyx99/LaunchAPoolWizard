@@ -537,7 +537,9 @@ body {
 .m-auto {
   margin: auto;
 }
-
+.mb-4 {
+  margin-bottom: 16px !important;
+}
 .pt {
   font-size: 11px;
   color: var(--gl);

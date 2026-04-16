@@ -3,15 +3,18 @@ import { Idl } from '@project-serum/anchor/dist/cjs/idl';
 import { Program } from '@project-serum/anchor/dist/cjs/program';
 import {
   createAssociatedTokenAccountInstruction,
+  getAccount,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import { PublicKey, Connection, SystemProgram, Transaction, SendTransactionError, TransactionInstruction } from '@solana/web3.js';
 import BN from 'bn.js';
+import { Pool } from './page';
 export const REFI_POOL_PROGRAM_ID = new PublicKey('DoCrin3rSc5wiPMaCSjBk3rN5RnswrDqNnghw6VVmf8m');
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 export const USDC_MINT = new PublicKey('7TrvqwZpZyRJM67YUW8U3bfx346rhdzBYM9vcyxqXcj5');
 export const NAV_WALLET = new PublicKey('26TbGcvMErPNmihXtqa2ZCp7WvDhpthNeNnKFaUMJfuA');
+export const GENERATED_POOLS_KEY = new PublicKey('9pbtq29M9ixSCndtXj6tdWaybuknnqqU2Wz9PgQSwa6c');
 let IDL: any | null = null;
 
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -28,30 +31,6 @@ export interface PoolConfig {
   maxQueueSize: number;
 }
 
-export interface PoolState {
-  config: {
-    adminAuthority: string;
-    oracleAuthority: string;
-    feeCollector: string;
-    depositFeeBps: number;
-    withdrawalFeeBps: number;
-    managementFeeBps: number;
-    initialExchangeRate: string;
-    maxTotalSupply: string;
-    maxQueueSize: number;
-  };
-  iptMint: string;
-  usdcReserve: string;
-  totalIptSupply: string;
-  totalUsdcReserves: string;
-  totalAccumulatedFees: string;
-  currentExchangeRate: string;
-  pendingQueue: Array<{
-    user: string;
-    iptAmount: string;
-    timestamp: string;
-  }>;
-}
 
 
 type GetOrCreateATAResult = {
@@ -110,6 +89,34 @@ export const handleSolanaError = async (
   throw err;
 };
 
+export const getPoolState = async (program: any, poolPda: PublicKey): Promise<Pool> => {
+  const pool: any = await (program.program.account as any).pool.fetch(poolPda);
+  console.log("Raw on-chain pool data:", pool);
+  return {
+    ...pool,
+    pendingQueue: (pool.pendingQueue || []).map((x: any) => ({
+      user: x.user?.toString(),
+      iptAmount: x.iptAmount?.toString(),
+      timestamp: x.timestamp?.toString(),
+    })),
+  };
+};
+
+export const getFormattedPrice = (
+  val = 0,
+  moreOptions?: Intl.NumberFormatOptions,
+  locale = 'en-US'
+) => {
+  const formatter = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'USD',
+    currencyDisplay: 'code',
+    ...moreOptions,
+  });
+
+  return formatter.format(val).slice(4);
+}
+
 export const createRefiPoolSDK = ({
   program,
   connection,
@@ -152,17 +159,36 @@ export const createRefiPoolSDK = ({
     return poolPda;
   }
 
-  const deriveIptMintPda = (poolPda: PublicKey): PublicKey =>
-    PublicKey.findProgramAddressSync(
+  const deriveIptMintPda = (poolPda: PublicKey): PublicKey => {
+    debugger;
+    console.log(program);
+    const pda = PublicKey.findProgramAddressSync(
       [Buffer.from('ipt_mint'), poolPda.toBuffer()],
       program.program.programId
     )[0];
+    return pda;
+  };
 
   const deriveUsdcReservePda = (poolPda: PublicKey): PublicKey =>
     PublicKey.findProgramAddressSync(
       [Buffer.from('usdc_reserve'), poolPda.toBuffer()],
       program.program.programId
     )[0];
+
+
+  const getTokenBalance = async (tokenAccount: PublicKey): Promise<string> => {
+    try {
+      if (!wallet?.publicKey) {
+        throw new Error('Wallet not connected');
+      }
+      const { ata: ataTokenAccount } = await getOrCreateTokenAccountIx(tokenAccount, wallet.publicKey, wallet.publicKey);
+      const account = await getAccount(connection, ataTokenAccount);
+      return account.amount.toString();
+    } catch (error) {
+      console.log(`Failed to get token balance: ${error}`);
+      return '0';
+    }
+  };
 
   const buildAndSendTx = async (tx: Transaction) => {
     assertWallet();
@@ -180,36 +206,8 @@ export const createRefiPoolSDK = ({
    * Includes configuration, reserves, supply, fees,
    * and the pending withdrawal queue.
    */
-  const getPoolState = async (poolPda: PublicKey): Promise<PoolState> => {
-    const pool: any = await (program.program.account as any).pool.fetch(poolPda);
 
-    return {
-      config: {
-        adminAuthority: pool.config.adminAuthority.toString(),
-        oracleAuthority: pool.config.oracleAuthority.toString(),
-        feeCollector: pool.config.feeCollector.toString(),
-        depositFeeBps: pool.config.depositFeeBps,
-        withdrawalFeeBps: pool.config.withdrawalFeeBps,
-        managementFeeBps: pool.config.managementFeeBps,
-        initialExchangeRate: pool.config.initialExchangeRate.toString(),
-        maxTotalSupply: pool.config.maxTotalSupply.toString(),
-        maxQueueSize: pool.config.maxQueueSize,
-      },
-      iptMint: pool.iptMint.toString(),
-      usdcReserve: pool.usdcReserve.toString(),
-      totalIptSupply: pool.totalIptSupply.toString(),
-      totalUsdcReserves: pool.totalUsdcReserves.toString(),
-      totalAccumulatedFees: pool.totalAccumulatedFees.toString(),
-      currentExchangeRate: pool.currentExchangeRate.toString(),
-      pendingQueue: (pool.pendingQueue || []).map((x: any) => ({
-        user: x.user?.toString(),
-        iptAmount: x.iptAmount?.toString(),
-        timestamp: x.timestamp?.toString(),
-      })),
-    };
-  };
   const getOrCreateTokenAccountIx = async (
-    connection: Connection,
     mint: PublicKey,
     owner: PublicKey,
     payer: PublicKey
@@ -312,9 +310,9 @@ export const createRefiPoolSDK = ({
       if (!wallet?.publicKey) {
         throw new Error('Wallet not connected');
       }
- 
+
       const { ata: navWalletUsdc } = (
-        await getOrCreateTokenAccountIx(connection, USDC_MINT, NAV_WALLET, wallet.publicKey)
+        await getOrCreateTokenAccountIx(USDC_MINT, NAV_WALLET, wallet.publicKey)
       );
       const pendingFeeReserve = derivePendingFeeReservePda(poolPda);
       const poolAuthority = poolPda;
@@ -340,6 +338,110 @@ export const createRefiPoolSDK = ({
       throw new Error(`Failed to init wallets: ${error.message}`);
     }
   }
+
+  /**
+   * Phase 2: User deposit USDC to receive IPT.
+   * Net USDC is split: nav_allocation_bps % to NAV wallet, rest to pending_fee_reserve. IPT is minted to user.
+   * Requires initWallets to have been called first.
+   * @param navWalletUsdc - NAV wallet's USDC token account (owner = pool.wallet_config.nav_wallet)
+   * @param pendingFeeReserve - Pool's pending fee reserve token account (PDA)
+   */
+  const userDeposit = async (
+    poolPda: PublicKey,
+    poolAuthority: PublicKey,
+    pendingFeeReserve: PublicKey,
+    netUsdcAmount: string,
+    minIptAmount: string
+  ): Promise<string> => {
+    try {
+      if (!wallet?.publicKey) {
+        throw new Error('Wallet not connected');
+      }
+      const { ata: navWalletUsdc } = (
+        await getOrCreateTokenAccountIx(USDC_MINT, NAV_WALLET, wallet.publicKey)
+      );
+      debugger;
+      const iptMint = deriveIptMintPda(poolPda);
+      const { ata: userUsdcAccount } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
+      const { ata: userIptAccount } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
+      const tx = await program.program.methods
+        .userDeposit(new BN(netUsdcAmount), new BN(minIptAmount))
+        .accounts({
+          user: wallet.publicKey,
+          pool: poolPda,
+          poolAuthority,
+          userUsdcAccount,
+          userIptAccount,
+          navWalletUsdc,
+          pendingFeeReserve,
+          iptMint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (
+        await connection.getLatestBlockhash()
+      ).blockhash;
+
+      const signedTx = await buildAndSendTx(tx);
+      return signedTx;
+    } catch (error: any) {
+      throw new Error(`Failed to deposit: ${error.message}`);
+    }
+  };
+
+  /**
+   * User withdraw USDC by burning IPT.
+   * Direct flow: if reserve is insufficient, instruction fails (no queue).
+   */
+  const userWithdraw = async (
+    program: any,
+    wallet: any,
+    connection: Connection,
+    poolPda: PublicKey,
+    poolAuthority: PublicKey,
+    userUsdcAccount: PublicKey,
+    userIptAccount: PublicKey,
+    usdcReserve: PublicKey,
+    iptMint: PublicKey,
+    withdrawIptAmount: string,
+    minUsdcAmount: string
+  ): Promise<string> => {
+    try {
+      const tx = await program.methods
+        .userWithdraw(new BN(withdrawIptAmount), new BN(minUsdcAmount))
+        .accounts({
+          user: wallet.publicKey,
+          pool: poolPda,
+          poolAuthority,
+          userUsdcAccount,
+          userIptAccount,
+          poolUsdcReserve: usdcReserve,
+          iptMint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (
+        await connection.getLatestBlockhash()
+      ).blockhash;
+
+      const signedTx = await wallet.signTransaction(tx);
+      const sig = await connection.sendRawTransaction(
+        signedTx.serialize()
+      );
+
+      await connection.confirmTransaction(sig);
+
+      console.log(`✅ Withdraw: ${sig}`);
+      return sig;
+    } catch (error: any) {
+      throw new Error(`Failed to withdraw: ${error.message}`);
+    }
+  };
   const derivePendingFeeReservePda = (poolPda: PublicKey): PublicKey => {
     const [pendingFeeReserve] = PublicKey.findProgramAddressSync(
       [Buffer.from("pending_fee_reserve"), poolPda.toBuffer()],
@@ -347,7 +449,6 @@ export const createRefiPoolSDK = ({
     );
     return pendingFeeReserve;
   };
-
 
   return {
     getPoolState,
@@ -357,6 +458,11 @@ export const createRefiPoolSDK = ({
     poolIdToSeed,
     buildAndSendTx,
     toFixedBytes,
+    userDeposit,
+    userWithdraw,
+    getTokenBalance,
+    deriveIptMintPda,
+    getOrCreateTokenAccountIx,
   };
 };
 
