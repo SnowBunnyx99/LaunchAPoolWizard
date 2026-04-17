@@ -54,7 +54,6 @@ export function useVoltActions(
   // Deposit
   // =========================
   const deposit = useCallback(async () => {
-    debugger;
     if (!poolPda) {
       throw new Error('Pool PDA is required');
     }
@@ -83,6 +82,35 @@ export function useVoltActions(
     }
   }, [amountDeposit, poolPda, sdk, program.program.programId]);
 
+  const withdraw = useCallback(async () => {
+    if (!poolPda) {
+      throw new Error('Pool PDA is required');
+    }
+
+    if (amountWithdraw <= 0) return;
+    const [usdcReservePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("usdc_reserve"), poolPda.toBuffer()],
+      program.program.programId
+    );
+    const poolUsdcReserve = usdcReservePda;
+    setLoading(true);
+
+    try {
+      if (!sdk) {
+        throw new Error('SDK not initialized');
+      }
+      const signature = await sdk.userWithdraw(
+        poolPda,
+        poolUsdcReserve,
+        Math.floor(amountWithdraw * 10 ** USDC_DECIMALS).toString(),
+      );
+
+      return signature;
+    } finally {
+      setLoading(false);
+    }
+  }, [amountWithdraw, poolPda, sdk, program.program.programId]);
+
   // ✅ Optional: early return AFTER hooks
   if (!poolPda) {
     return {
@@ -93,6 +121,9 @@ export function useVoltActions(
       minReceiveDeposit: 0,
       minReceiveWithdraw: 0,
       deposit: async () => {
+        throw new Error('Pool not initialized');
+      },
+      withdraw: async () => {
         throw new Error('Pool not initialized');
       },
       loading: false,
@@ -107,6 +138,7 @@ export function useVoltActions(
     minReceiveDeposit,
     minReceiveWithdraw,
     deposit,
+    withdraw,
     loading,
   };
 }

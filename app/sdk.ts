@@ -357,15 +357,20 @@ export const createRefiPoolSDK = ({
       if (!wallet?.publicKey) {
         throw new Error('Wallet not connected');
       }
-      const { ata: navWalletUsdc } = (
+      const { ata: navWalletUsdc, ix: createNavAtaIx } = (
         await getOrCreateTokenAccountIx(USDC_MINT, NAV_WALLET, wallet.publicKey)
       );
 
       const iptMint = deriveIptMintPda(poolPda);
-      const { ata: userUsdcAccount } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
-      const { ata: userIptAccount } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
-      console.log(iptMint, userUsdcAccount.toString(), userIptAccount.toString());
-      const tx = await program.program.methods
+      const { ata: userUsdcAccount, ix: createUsdcAtaIx } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
+      const { ata: userIptAccount, ix: createIptAtaIx } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
+
+      const tx = new Transaction();
+      if (createNavAtaIx) tx.add(createNavAtaIx);
+      if (createUsdcAtaIx) tx.add(createUsdcAtaIx);
+      if (createIptAtaIx) tx.add(createIptAtaIx);
+
+      const depositIx = await program.program.methods
         .userDeposit(new BN(netUsdcAmount), new BN('0'))
         .accounts({
           user: wallet.publicKey,
@@ -381,6 +386,8 @@ export const createRefiPoolSDK = ({
         })
         .transaction();
 
+      tx.add(...depositIx.instructions);
+
       const signedTx = await buildAndSendTx(tx);
       return signedTx;
     } catch (error: any) {
@@ -393,45 +400,36 @@ export const createRefiPoolSDK = ({
    * Direct flow: if reserve is insufficient, instruction fails (no queue).
    */
   const userWithdraw = async (
-    program: any,
-    wallet: any,
-    connection: Connection,
     poolPda: PublicKey,
-    poolAuthority: PublicKey,
-    userUsdcAccount: PublicKey,
-    userIptAccount: PublicKey,
-    usdcReserve: PublicKey,
-    iptMint: PublicKey,
+    poolUsdcReserve: PublicKey,
     withdrawIptAmount: string,
-    minUsdcAmount: string
   ): Promise<string> => {
     try {
-      const tx = await program.methods
-        .userWithdraw(new BN(withdrawIptAmount), new BN(minUsdcAmount))
+      if (!wallet?.publicKey) {
+        throw new Error('Wallet not connected');
+      }
+      const iptMint = deriveIptMintPda(poolPda);
+      const { ata: userUsdcAccount, ix: createUsdcAtaIx } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
+      const { ata: userIptAccount, ix: createIptAtaIx } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
+
+      const tx = new Transaction();
+      if (createUsdcAtaIx) tx.add(createUsdcAtaIx);
+      if (createIptAtaIx) tx.add(createIptAtaIx);
+      const withdrawTx = await program.program.methods
+        .userWithdraw(new BN(withdrawIptAmount), new BN('0'))
         .accounts({
           user: wallet.publicKey,
           pool: poolPda,
-          poolAuthority,
+          poolAuthority: poolPda,
           userUsdcAccount,
           userIptAccount,
-          poolUsdcReserve: usdcReserve,
+          poolUsdcReserve,
           iptMint,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .transaction();
-
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = (
-        await connection.getLatestBlockhash()
-      ).blockhash;
-
-      const signedTx = await wallet.signTransaction(tx);
-      const sig = await connection.sendRawTransaction(
-        signedTx.serialize()
-      );
-
-      await connection.confirmTransaction(sig);
-
+      tx.add(...withdrawTx.instructions);
+      const sig = await buildAndSendTx(tx);
       console.log(`✅ Withdraw: ${sig}`);
       return sig;
     } catch (error: any) {

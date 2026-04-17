@@ -192,6 +192,21 @@ export default function ReFiApp() {
       console.error(err);
     }
   };
+  const onConfirmWithdraw = async () => {
+    try {
+      const sig = await actions.withdraw(); // waits until tx is confirmed
+      if (sig) {
+        console.log('Withdraw successful, signature:', sig);
+        toast.success('Withdraw successfully!');
+        await sleep(3000);
+        balances.fetchBalances();
+        actions.setAmountWithdraw(0);
+      }
+    } catch (err: any) {
+      toast.error(`Deposit Failed! ${err.messsage}`);
+      console.error(err);
+    }
+  };
 
   const bytesToString = (arr: number[]) =>
     new TextDecoder().decode(new Uint8Array(arr)).replace(/\0/g, '');
@@ -438,8 +453,8 @@ export default function ReFiApp() {
                   <h4>Withdraw</h4>
                   <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(balances.balanceVOLT))} VOLT</p>
                   <div className="ai">
-                    <input type="number" id="wdAmt" placeholder="Enter shares" min="0.01" step="0.01" />
-                    <button className="ab w" onClick={() => { }}>
+                    <input type="number" id="wdAmt" placeholder="Enter shares" min="0.01" step="0.01" onChange={(e) => actions.setAmountWithdraw(parseFloat(e.target.value))} />
+                    <button className="ab w" onClick={() => onConfirmWithdraw()}>
                       Withdraw
                     </button>
                   </div>
