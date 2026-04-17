@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Idl } from '@project-serum/anchor/dist/cjs/idl';
 import { Program } from '@project-serum/anchor/dist/cjs/program';

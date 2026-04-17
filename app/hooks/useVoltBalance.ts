@@ -1,20 +1,21 @@
-import { useState, useCallback } from 'react';
+// SPDX-License-Identifier: Apache-2.0
+
+import { useState, useCallback, useMemo } from 'react';
 import { formatUnits } from 'viem';
-import { createRefiPoolSDK, USDC_MINT } from '../sdk';
+import { USDC_DECIMALS, USDC_MINT } from '../sdk';
 import { PublicKey } from '@solana/web3.js';
-import { useInitProgramVolt } from './useInitProgramVolt';
-import { useSolanaConnection } from './useInitSolanaConnection';
 import { WalletContext } from './useVoltActions';
 import { useInitProgramSdk } from './useInitProgramSdk';
+import { useInitProgramVolt } from './useInitProgramVolt';
 
 export function useVoltBalances(walletCtx: WalletContext, poolPda: PublicKey | null) {
-  const USDC_DECIMALS = 6;
-  const program = useInitProgramVolt().initProgram();
+  const { initProgram } = useInitProgramVolt();
+  const program = useMemo(() => {
+    return initProgram();
+  }, []);
   const sdk = useInitProgramSdk(program, walletCtx);
   const [depositBalance, setDepositBalance] = useState('0');
   const [balanceVOLT, setBalanceVOLT] = useState('0');
-  const [exchangeRate, setExchangeRate] = useState('0');
-  const [withdrawFeeBPS, setWithdrawFeeBPS] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchBalances = useCallback(async () => {
@@ -23,16 +24,10 @@ export function useVoltBalances(walletCtx: WalletContext, poolPda: PublicKey | n
     setLoading(true);
 
     try {
-      const poolState = await sdk.getPoolState(program, poolPda);
-
-      setExchangeRate(poolState.currentExchangeRate);
-      setWithdrawFeeBPS(poolState.config.withdrawalFeeBps);
-
       const iptMint = sdk.deriveIptMintPda(poolPda);
-
       const usdcBalance = await sdk.getTokenBalance(USDC_MINT);
       const iptBalance = await sdk.getTokenBalance(iptMint);
-
+      console.log(usdcBalance);
       setDepositBalance(
         formatUnits(BigInt(usdcBalance), USDC_DECIMALS)
       );
@@ -45,13 +40,11 @@ export function useVoltBalances(walletCtx: WalletContext, poolPda: PublicKey | n
     } finally {
       setLoading(false);
     }
-  }, [poolPda, program, sdk]);
+  }, [poolPda, sdk]);
 
   return {
     depositBalance,
     balanceVOLT,
-    exchangeRate,
-    withdrawFeeBPS,
     fetchBalances,
     loading,
   };

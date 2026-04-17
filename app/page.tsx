@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
@@ -10,9 +11,9 @@ import BN from 'bn.js';
 import { getFormattedPrice, getPoolState, sleep, USDC_DECIMALS, USDC_MINT } from './sdk';
 import { toast } from 'react-toastify';
 import { useInitProgramVolt } from './hooks/useInitProgramVolt';
-import { useVoltBalances } from './hooks/useVoltBalance';
 import { useVoltActions } from './hooks/useVoltActions';
 import { useInitProgramSdk } from './hooks/useInitProgramSdk';
+import { formatUnits } from 'viem';
 
 export interface PoolConfig {
   adminAuthority: string;
@@ -93,16 +94,14 @@ export default function ReFiApp() {
     poolPubkey
   );
 
-  const balances = useVoltBalances(
-    { publicKey, signTransaction: signTransaction || (async (tx) => tx) },
-    poolPubkey
-  );
   const program = useMemo(() => {
     return initProgram();
   }, []);
   const sdk = useInitProgramSdk(program, { publicKey, signTransaction: signTransaction || (async (tx) => tx) });
   const [step, setStep] = useState<1 | 2 | 'deploy'>(1);
   const [view, setView] = useState<'wizard' | 'dashboard' | null>(null);
+  const [depositBalance, setDepositBalance] = useState('0');
+  const [balanceVOLT, setBalanceVOLT] = useState('0');
   useEffect(() => {
     const data = localStorage.getItem('vaultDeployment');
     if (data) {
@@ -177,15 +176,27 @@ export default function ReFiApp() {
       setDeploying(false);
     }
   };
+  const fetchBalances = async () => {
+    if (sdk && poolAddress) {
+      const iptMint = sdk.deriveIptMintPda(new PublicKey(poolAddress));
+      const usdcBalance = await sdk.getTokenBalance(USDC_MINT);
+      const iptBalance = await sdk.getTokenBalance(iptMint);
+      setDepositBalance(formatUnits(BigInt(usdcBalance), USDC_DECIMALS));
+      setBalanceVOLT(formatUnits(BigInt(iptBalance), USDC_DECIMALS));
+      console.log(usdcBalance, iptBalance);
+    }
+  }
   const onConfirmDeposit = async () => {
     try {
       const sig = await actions.deposit(); // waits until tx is confirmed
       if (sig) {
         console.log('Deposit successful, signature:', sig);
         toast.success('Deposit successfully!');
-        await sleep(3000);
-        balances.fetchBalances();
         actions.setAmountDeposit(0);
+        await sleep(3000);
+        console.log('Start fetching balance');
+        fetchBalances();
+        fetchPoolState();
       }
     } catch (err: any) {
       toast.error(`Deposit Failed! ${err.messsage}`);
@@ -199,7 +210,9 @@ export default function ReFiApp() {
         console.log('Withdraw successful, signature:', sig);
         toast.success('Withdraw successfully!');
         await sleep(3000);
-        balances.fetchBalances();
+        console.log('Start fetching balance');
+        fetchBalances();
+        fetchPoolState();
         actions.setAmountWithdraw(0);
       }
     } catch (err: any) {
@@ -208,9 +221,7 @@ export default function ReFiApp() {
     }
   };
 
-  const bytesToString = (arr: number[]) =>
-    new TextDecoder().decode(new Uint8Array(arr)).replace(/\0/g, '');
-  useEffect(() => {
+  const fetchPoolState = () => {
     if (!poolAddress || !program) return;
     getPoolState(program, new PublicKey(poolAddress)).then((data) => {
       console.log('On-chain pool data:', data);
@@ -220,11 +231,15 @@ export default function ReFiApp() {
     }).catch((err) => {
       console.error('Error fetching pool state:', err);
     });
+  }
+  const bytesToString = (arr: number[]) => { return new TextDecoder().decode(new Uint8Array(arr)).replace(/\0/g, ''); }
 
+  useEffect(() => {
+    fetchPoolState();
   }, [])
   useEffect(() => {
     if (!pool || !poolPubkey) return;
-    balances.fetchBalances();
+    fetchBalances();
   }, [pool, poolPubkey])
 
   return (
@@ -326,6 +341,19 @@ export default function ReFiApp() {
                   <div className="ri"><div className="rl">Network</div><div className="rv">Solana (Devnet)</div></div>
                 </div>
                 <div className="note">⚡ Deploying will create a new pool on Solana devnet. You&apos;ll sign one transaction in your wallet.</div>
+                {/* <pre style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', fontSize: '14px' }}>
+                  <code>
+                    {`const hardCodedConfig = {
+  depositFeeBps: 100,    // 1%
+  withdrawalFeeBps: 200, // 2%
+  managementFeeBps: 50,  // 0.5%
+  initialExchangeRate: new BN(1000000), // 1:1
+  maxTotalSupply: new BN(0), // Unlimited
+  maxQueueSize: 20,
+  navAllocationBps: 10000, // 100% to NAV
+}`}
+                  </code>
+                </pre> */}
                 <div className="brow">
                   <button className="bs" onClick={() => setStep(1)}>← Back</button>
                   <button className="bp" onClick={() => handleDeploy()}>Deploy pool</button>
@@ -393,7 +421,7 @@ export default function ReFiApp() {
                       <div className="mt-6">
                         <button
                           className="bp"
-                          onClick={() => setView('dashboard')}
+                          onClick={() => window.location.reload()}
                         >
                           Open pool dashboard →
                         </button>
@@ -440,9 +468,9 @@ export default function ReFiApp() {
               <div className="ag">
                 <div className="ac">
                   <h4>Deposit USDC</h4>
-                  <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(balances.depositBalance))} USDC</p>
+                  <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(depositBalance))} USDC</p>
                   <div className="ai">
-                    <input type="number" id="depAmt" placeholder="Enter amount" min="0.01" step="0.01" onChange={(e) => actions.setAmountDeposit(parseFloat(e.target.value) || 0)} />
+                    <input type="number" id="depAmt" placeholder="Enter amount" min="0.01" step="0.01" value={actions.amountDeposit} onChange={(e) => actions.setAmountDeposit(parseFloat(e.target.value) || 0)} />
                     <button className="ab d" onClick={() => onConfirmDeposit()}>
                       Deposit
                     </button>
@@ -451,9 +479,9 @@ export default function ReFiApp() {
                 </div>
                 <div className="ac">
                   <h4>Withdraw</h4>
-                  <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(balances.balanceVOLT))} VOLT</p>
+                  <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(balanceVOLT))} VOLT</p>
                   <div className="ai">
-                    <input type="number" id="wdAmt" placeholder="Enter shares" min="0.01" step="0.01" onChange={(e) => actions.setAmountWithdraw(parseFloat(e.target.value))} />
+                    <input type="number" id="wdAmt" placeholder="Enter shares" min="0.01" step="0.01" value={actions.amountWithdraw} onChange={(e) => actions.setAmountWithdraw(parseFloat(e.target.value))} />
                     <button className="ab w" onClick={() => onConfirmWithdraw()}>
                       Withdraw
                     </button>
@@ -463,15 +491,14 @@ export default function ReFiApp() {
               </div>
 
 
-              <div className="card">
+              <div className="card" style={{ marginTop: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div style={{ fontSize: '15px', fontWeight: '600' }}>Your position</div>
-                  <span className="badge bgr" id="posL">No position</span>
+                  {/* <span className="badge bgr" id="posL">No position</span> */}
                 </div>
                 <div className="fr3">
                   <div className="m"><div className="ml">Your shares</div><div className="mv" id="uShares">
-                    {/* {pool.totalIptSupply.toString()} */}
-                    0
+                    {parseFloat(pool.totalIptSupply.toString()) / 10 ** USDC_DECIMALS}
                   </div></div>
                   <div className="m"><div className="ml">Current value</div><div className="mv" id="uVal">${pool.config.initialExchangeRate ? (parseFloat(pool.config.initialExchangeRate.toString()) / 1e6).toFixed(4) : '0.0000'}</div></div>
                   <div className="m"><div className="ml">Gain / loss</div><div className="mv" id="uGain" style={{ color: 'var(--gl)' }}>+$0.00</div></div>

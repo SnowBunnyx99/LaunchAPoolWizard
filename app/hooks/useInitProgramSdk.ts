@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
 import { useMemo } from 'react';
-import { Connection, PublicKey, Transaction } from '@solana/web3.js';
+import { PublicKey, Transaction } from '@solana/web3.js';
 import { createRefiPoolSDK } from '../sdk';
+import { useSolanaConnection } from './useInitSolanaConnection';
 
 type WalletLike = {
   publicKey: PublicKey | null;
@@ -12,12 +14,9 @@ export function useInitProgramSdk(
   program: any,
   wallet: WalletLike
 ) {
-  const connection = useMemo(() => {
-    return new Connection('https://api.devnet.solana.com');
-  }, []);
-
+  const connection = useSolanaConnection();
   const sdk = useMemo(() => {
-    if (!program || !wallet.publicKey || !wallet.signTransaction ) {
+    if (!program || !wallet.publicKey || !wallet.signTransaction) {
       return null;
     }
 

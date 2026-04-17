@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { useState, useMemo, useCallback } from 'react';
 import { useInitProgramVolt } from './useInitProgramVolt';
