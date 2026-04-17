@@ -1,34 +1,28 @@
 import { useState, useCallback } from 'react';
 import { formatUnits } from 'viem';
 import { createRefiPoolSDK, USDC_MINT } from '../sdk';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { useInitProgramVolt } from './useInitProgramVolt';
 import { useSolanaConnection } from './useInitSolanaConnection';
+import { WalletContext } from './useVoltActions';
+import { useInitProgramSdk } from './useInitProgramSdk';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useVoltBalances(walletCtx: any, poolPda: PublicKey) {
+export function useVoltBalances(walletCtx: WalletContext, poolPda: PublicKey | null) {
   const USDC_DECIMALS = 6;
-  const connection = useSolanaConnection();
+  const program = useInitProgramVolt().initProgram();
+  const sdk = useInitProgramSdk(program, walletCtx);
   const [depositBalance, setDepositBalance] = useState('0');
   const [balanceVOLT, setBalanceVOLT] = useState('0');
   const [exchangeRate, setExchangeRate] = useState('0');
   const [withdrawFeeBPS, setWithdrawFeeBPS] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // ✅ call hook at top level
-  const { initProgram } = useInitProgramVolt();
-
   const fetchBalances = useCallback(async () => {
+    if (!poolPda || !sdk) return;
+
     setLoading(true);
 
     try {
-      const program = await initProgram();
-      const sdk = createRefiPoolSDK({
-        program,
-        connection,
-        wallet: walletCtx,
-      });
-
       const poolState = await sdk.getPoolState(program, poolPda);
 
       setExchangeRate(poolState.currentExchangeRate);
@@ -46,13 +40,12 @@ export function useVoltBalances(walletCtx: any, poolPda: PublicKey) {
       setBalanceVOLT(
         formatUnits(BigInt(iptBalance), USDC_DECIMALS)
       );
-
     } catch (err) {
       console.error('Error fetching balances:', err);
     } finally {
       setLoading(false);
     }
-  }, [walletCtx, poolPda, initProgram, connection]);
+  }, [poolPda, program, sdk]);
 
   return {
     depositBalance,

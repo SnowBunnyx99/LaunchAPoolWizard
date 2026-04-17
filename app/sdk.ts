@@ -15,6 +15,9 @@ export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9
 export const USDC_MINT = new PublicKey('7TrvqwZpZyRJM67YUW8U3bfx346rhdzBYM9vcyxqXcj5');
 export const NAV_WALLET = new PublicKey('26TbGcvMErPNmihXtqa2ZCp7WvDhpthNeNnKFaUMJfuA');
 export const GENERATED_POOLS_KEY = new PublicKey('36uyNvFrV8B7b4Pg3d8Fs5QmLxDfRmCF4pef3dRcAAvf');
+export const USDC_DECIMALS = 6;
+
+
 let IDL: any | null = null;
 
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -160,7 +163,6 @@ export const createRefiPoolSDK = ({
   }
 
   const deriveIptMintPda = (poolPda: PublicKey): PublicKey => {
-    debugger;
     console.log(program);
     const pda = PublicKey.findProgramAddressSync(
       [Buffer.from('ipt_mint'), poolPda.toBuffer()],
@@ -348,10 +350,8 @@ export const createRefiPoolSDK = ({
    */
   const userDeposit = async (
     poolPda: PublicKey,
-    poolAuthority: PublicKey,
     pendingFeeReserve: PublicKey,
-    netUsdcAmount: string,
-    minIptAmount: string
+    netUsdcAmount: bigint,
   ): Promise<string> => {
     try {
       if (!wallet?.publicKey) {
@@ -365,16 +365,14 @@ export const createRefiPoolSDK = ({
       const { ata: userUsdcAccount } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
       const { ata: userIptAccount } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
       console.log(iptMint, userUsdcAccount.toString(), userIptAccount.toString());
-      debugger;
-      await sleep(10000);
       const tx = await program.program.methods
-        .userDeposit(new BN(netUsdcAmount), new BN(minIptAmount))
+        .userDeposit(new BN(netUsdcAmount), new BN('0'))
         .accounts({
           user: wallet.publicKey,
           pool: poolPda,
-          poolAuthority,
-          userUsdcAccount,
-          userIptAccount,
+          poolAuthority: poolPda,
+          userUsdcAccount: userUsdcAccount,
+          userIptAccount: userIptAccount,
           navWalletUsdc,
           pendingFeeReserve,
           iptMint,
@@ -382,11 +380,6 @@ export const createRefiPoolSDK = ({
           systemProgram: SystemProgram.programId,
         })
         .transaction();
-
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = (
-        await connection.getLatestBlockhash()
-      ).blockhash;
 
       const signedTx = await buildAndSendTx(tx);
       return signedTx;

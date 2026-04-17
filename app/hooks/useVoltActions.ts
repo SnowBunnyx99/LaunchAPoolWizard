@@ -13,26 +13,34 @@ export interface WalletContext {
 export interface PoolContext {
   exchangeRate: number;   // already parsed
   withdrawFeeBPS: number;
-  pendingFeeReserve: PublicKey | undefined; // already parsed
 }
-
-export function useVoltActions(poolCtx: PoolContext, walletCtx: WalletContext, poolPda: PublicKey) {
+export function useVoltActions(
+  poolCtx: PoolContext,
+  walletCtx: WalletContext,
+  poolPda: PublicKey | null
+) {
   const USDC_DECIMALS = 6;
+
   const program = useInitProgramVolt().initProgram();
   const sdk = useInitProgramSdk(program, walletCtx);
+
   const [amountDeposit, setAmountDeposit] = useState(0);
   const [amountWithdraw, setAmountWithdraw] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // ✅ computed → useMemo
+  // ✅ SAFE: hooks always run
   const minReceiveDeposit = useMemo(() => {
+    if (!poolPda) return 0;
+
     return (
       (amountDeposit * 10 ** USDC_DECIMALS) /
       Number(poolCtx.exchangeRate || 1)
     );
-  }, [amountDeposit, poolCtx.exchangeRate]);
+  }, [amountDeposit, poolCtx.exchangeRate, poolPda]);
 
   const minReceiveWithdraw = useMemo(() => {
+    if (!poolPda) return 0;
+
     const gross =
       (amountWithdraw * Number(poolCtx.exchangeRate)) /
       10 ** USDC_DECIMALS;
@@ -40,64 +48,56 @@ export function useVoltActions(poolCtx: PoolContext, walletCtx: WalletContext, p
     const fee = (gross * poolCtx.withdrawFeeBPS) / 10_000;
 
     return gross - fee;
-  }, [amountWithdraw, poolCtx.exchangeRate, poolCtx.withdrawFeeBPS]);
+  }, [amountWithdraw, poolCtx.exchangeRate, poolCtx.withdrawFeeBPS, poolPda]);
 
   // =========================
   // Deposit
   // =========================
   const deposit = useCallback(async () => {
-    if (amountDeposit <= 0) return;
+    debugger;
+    if (!poolPda) {
+      throw new Error('Pool PDA is required');
+    }
 
+    if (amountDeposit <= 0) return;
+    const [pendingFeeReservePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("pending_fee_reserve"), poolPda.toBuffer()],
+      program.program.programId
+    );
+    const pendingFeeReserve = pendingFeeReservePda;
     setLoading(true);
 
     try {
-      if (!sdk || !poolCtx.pendingFeeReserve) {
+      if (!sdk) {
         throw new Error('SDK not initialized');
       }
-        console.log('pendingFeeREserve', poolCtx.pendingFeeReserve.toString());
       const signature = await sdk.userDeposit(
         poolPda,
-        poolPda,
-        poolCtx.pendingFeeReserve,
-        Math.floor(amountDeposit * 10 ** USDC_DECIMALS).toString(),
-        '0'
+        pendingFeeReserve,
+        BigInt(amountDeposit * 10 ** USDC_DECIMALS),
       );
 
       return signature;
     } finally {
       setLoading(false);
     }
-  }, [amountDeposit, poolPda, sdk, poolCtx.pendingFeeReserve]);
+  }, [amountDeposit, poolPda, sdk, program.program.programId]);
 
-  // =========================
-  // Withdraw
-  // =========================
-  // const withdraw = useCallback(async () => {
-  //   if (amountWithdraw <= 0) return;
-
-  //   setLoading(true);
-
-  //   try {
-  //     await walletCtx.assertConnected();
-  //     if(!sdk) {
-  //       throw new Error('SDK not initialized');
-  //     }
-  //     const iptMint = sdk.deriveIptMintPda(poolPda);
-
-  //     const signature = await sdk.userWithdraw(
-  //       poolPda,
-  //       poolPda,
-  //       USDC_MINT,
-  //       iptMint,
-  //       Math.floor(amountWithdraw * 10 ** USDC_DECIMALS).toString(),
-  //       '0'
-  //     );
-
-  //     return signature;
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // }, [amountWithdraw, walletCtx, poolPda, sdk]);
+  // ✅ Optional: early return AFTER hooks
+  if (!poolPda) {
+    return {
+      amountDeposit,
+      setAmountDeposit,
+      amountWithdraw,
+      setAmountWithdraw,
+      minReceiveDeposit: 0,
+      minReceiveWithdraw: 0,
+      deposit: async () => {
+        throw new Error('Pool not initialized');
+      },
+      loading: false,
+    };
+  }
 
   return {
     amountDeposit,
@@ -107,7 +107,6 @@ export function useVoltActions(poolCtx: PoolContext, walletCtx: WalletContext, p
     minReceiveDeposit,
     minReceiveWithdraw,
     deposit,
-    // withdraw,
     loading,
   };
 }
