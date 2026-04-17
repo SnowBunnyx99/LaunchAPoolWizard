@@ -127,9 +127,11 @@ export default function ReFiApp() {
   // DEPLOY
   // =====================
   const handleDeploy = async () => {
-
     try {
-      if (!sdk || !publicKey) {
+      if (!publicKey) {
+        throw new Error('Connect your wallet first');
+      }
+      if (!sdk) {
         throw new Error('SDK not initialized');
       }
       setStep('deploy');
@@ -247,7 +249,7 @@ export default function ReFiApp() {
 
   useEffect(() => {
     fetchPoolState();
-  }, [])
+  }, [poolAddress])
   useEffect(() => {
     if (!pool || !poolPubkey) return;
     fetchBalances();
@@ -272,9 +274,23 @@ export default function ReFiApp() {
           </div>
 
           <div className="steps">
-            <div><div className="sd on" id="sd1">1</div><div className="slbl">Configure</div></div>
+            <div>
+              <div className={`sd ${step === 1 ? 'on' : ''}`} id="sd1">1</div>
+              <div className="slbl">Configure</div>
+            </div>
+
             <div className="sl" id="sl1"></div>
-            <div><div className="sd" id="sd2">2</div><div className="slbl">Deploy</div></div>
+            <div>
+              <div className={`sd ${step === 2 ? 'on' : ''}`} id="sd1">2</div>
+              <div className="slbl">Review</div>
+            </div>
+
+            <div className="sl" id="sl1"></div>
+
+            <div>
+              <div className={`sd ${step === 'deploy' ? 'on' : ''}`} id="sd2">3</div>
+              <div className="slbl">Deploy</div>
+            </div>
           </div>
 
           {/* STEP 1 */}
@@ -432,7 +448,9 @@ export default function ReFiApp() {
                       <div className="mt-6">
                         <button
                           className="bp"
-                          onClick={() => window.location.reload()}
+                          onClick={() => {
+                            setView('dashboard')
+                          }}
                         >
                           Open pool dashboard →
                         </button>
@@ -472,7 +490,7 @@ export default function ReFiApp() {
               <div className="mg">
                 <div className="m"><div className="ml">Price per share</div><div className="mv" id="dPPS">${pool.config.initialExchangeRate ? (parseFloat(pool.config.initialExchangeRate.toString()) / 1e6).toFixed(4) : '0.0000'}</div></div>
                 <div className="m"><div className="ml">TVL</div><div className="mv" id="dTVL">$0.00</div></div>
-                <div className="m"><div className="ml">Target APY</div><div className="mv gr" id="dAPY">{form.apy}%</div></div>
+                <div className="m"><div className="ml">Target APY</div><div className="mv gr" id="dAPY">{pool.config.targetApyBps / 1000}%</div></div>
                 <div className="m"><div className="ml">Shares in circulation</div><div className="mv" id="dShares">{parseFloat(pool.totalIptSupply.toString()) / 10 ** USDC_DECIMALS}</div></div>
               </div>
 

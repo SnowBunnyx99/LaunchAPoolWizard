@@ -16,7 +16,10 @@ export function useInitProgramSdk(
 ) {
   const connection = useSolanaConnection();
   const sdk = useMemo(() => {
-    if (!program || !wallet.publicKey || !wallet.signTransaction) {
+    if( !wallet.publicKey || !wallet.signTransaction){
+      return null;
+    }
+    if (!program) {
       return null;
     }
 
