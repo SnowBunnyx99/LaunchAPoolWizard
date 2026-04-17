@@ -77,7 +77,8 @@ export default function ReFiApp() {
   });
   const { initProgram } = useInitProgramVolt();
   const [pool, setPool] = useState<Pool | null>(null);
-
+  const [loadingDeposit, setLoadingDeposit] = useState<boolean>(false);
+  const [loadingWithdraw, setLoadingWithdraw] = useState<boolean>(false);
   const { publicKey, signTransaction } = useWallet();
 
   const poolPubkey = useMemo(() => {
@@ -188,6 +189,7 @@ export default function ReFiApp() {
   }
   const onConfirmDeposit = async () => {
     try {
+      setLoadingDeposit(true);
       const sig = await actions.deposit(); // waits until tx is confirmed
       if (sig) {
         console.log('Deposit successful, signature:', sig);
@@ -199,12 +201,17 @@ export default function ReFiApp() {
         fetchPoolState();
       }
     } catch (err: any) {
-      toast.error(`Deposit Failed! ${err.messsage}`);
+
+      toast.error(`Deposit Failed!`);
       console.error(err);
+    }
+    finally {
+      setLoadingDeposit(false);
     }
   };
   const onConfirmWithdraw = async () => {
     try {
+      setLoadingWithdraw(false);
       const sig = await actions.withdraw(); // waits until tx is confirmed
       if (sig) {
         console.log('Withdraw successful, signature:', sig);
@@ -214,10 +221,14 @@ export default function ReFiApp() {
         fetchBalances();
         fetchPoolState();
         actions.setAmountWithdraw(0);
+        setLoadingWithdraw(false);
       }
     } catch (err: any) {
-      toast.error(`Deposit Failed! ${err.messsage}`);
+      toast.error(`Deposit Failed!`);
       console.error(err);
+    }
+    finally {
+      setLoadingWithdraw(false);
     }
   };
 
@@ -471,8 +482,12 @@ export default function ReFiApp() {
                   <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(depositBalance))} USDC</p>
                   <div className="ai">
                     <input type="number" id="depAmt" placeholder="Enter amount" min="0.01" step="0.01" value={actions.amountDeposit} onChange={(e) => actions.setAmountDeposit(parseFloat(e.target.value) || 0)} />
-                    <button className="ab d" onClick={() => onConfirmDeposit()}>
-                      Deposit
+                    <button
+                      className="ab d"
+                      onClick={onConfirmDeposit}
+                      disabled={loadingDeposit}
+                    >
+                      {loadingDeposit ? 'Processing...' : 'Deposit'}
                     </button>
                   </div>
                   <div className="pt" id="depP">Enter amount to preview</div>
@@ -482,8 +497,8 @@ export default function ReFiApp() {
                   <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(balanceVOLT))} VOLT</p>
                   <div className="ai">
                     <input type="number" id="wdAmt" placeholder="Enter shares" min="0.01" step="0.01" value={actions.amountWithdraw} onChange={(e) => actions.setAmountWithdraw(parseFloat(e.target.value))} />
-                    <button className="ab w" onClick={() => onConfirmWithdraw()}>
-                      Withdraw
+                    <button disabled={loadingWithdraw} className="ab w" onClick={() => onConfirmWithdraw()}>
+                      {loadingWithdraw ? 'Processing...' : 'Withdraw'}
                     </button>
                   </div>
                   <div className="pt" id="wdP">Enter shares to preview</div>
