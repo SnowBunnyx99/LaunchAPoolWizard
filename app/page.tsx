@@ -449,7 +449,7 @@ export default function ReFiApp() {
                         <button
                           className="bp"
                           onClick={() => {
-                            setView('dashboard')
+                            window.location.reload();
                           }}
                         >
                           Open pool dashboard →
