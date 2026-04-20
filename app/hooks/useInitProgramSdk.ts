@@ -5,7 +5,7 @@ import { createRefiPoolSDK } from '../sdk';
 import { useSolanaConnection } from './useInitSolanaConnection';
 
 type WalletLike = {
-  publicKey: PublicKey | null;
+  publicKey: PublicKey | null | undefined;
   signTransaction: (tx: Transaction) => Promise<Transaction>;
 };
 

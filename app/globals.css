@@ -147,6 +147,13 @@ body {
   margin-bottom: 32px
 }
 
+.steps div {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .sd {
   width: 34px;
   height: 34px;
@@ -391,14 +398,14 @@ body {
 
 .dh {
   display: flex;
-  align-items: center;
+  align-items: start;
   justify-content: space-between;
   margin-bottom: 16px
 }
 
 .dt {
   display: flex;
-  align-items: center;
+  align-items: start;
   gap: 12px
 }
 
@@ -537,9 +544,11 @@ body {
 .m-auto {
   margin: auto;
 }
+
 .mb-4 {
   margin-bottom: 16px !important;
 }
+
 .pt {
   font-size: 11px;
   color: var(--gl);

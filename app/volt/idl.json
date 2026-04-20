@@ -107,73 +107,6 @@
       "args": []
     },
     {
-      "name": "initWallets",
-      "docs": [
-        "Initialize external wallets configuration",
-        "Sets up NAV wallet and pending_fee_reserve"
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "pool",
-          "isMut": true,
-          "isSigner": false,
-          "docs": [
-            "Pool state account"
-          ]
-        },
-        {
-          "name": "poolAuthority",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "usdcMint",
-          "isMut": false,
-          "isSigner": false,
-          "docs": [
-            "USDC mint"
-          ]
-        },
-        {
-          "name": "pendingFeeReserve",
-          "isMut": true,
-          "isSigner": false,
-          "docs": [
-            "Pending fee reserve token account (PDA)"
-          ]
-        },
-        {
-          "name": "navWallet",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "navWalletUsdc",
-          "isMut": false,
-          "isSigner": false,
-          "docs": [
-            "NAV wallet's USDC token account (must be owned by nav_wallet)"
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "userDeposit",
       "docs": [
         "User deposits net USDC into pool and receives IPT (fees calculated internally)"
@@ -214,19 +147,11 @@
           ]
         },
         {
-          "name": "navWalletUsdc",
+          "name": "poolUsdcReserve",
           "isMut": true,
           "isSigner": false,
           "docs": [
-            "NAV wallet's USDC token account (receives nav_allocation_bps %)"
-          ]
-        },
-        {
-          "name": "pendingFeeReserve",
-          "isMut": true,
-          "isSigner": false,
-          "docs": [
-            "Pending fee reserve PDA (receives remaining %)"
+            "Pool's USDC reserve"
           ]
         },
         {
@@ -512,14 +437,6 @@
           "type": {
             "defined": "PoolConfig"
           }
-        },
-        {
-          "name": "newWalletConfig",
-          "type": {
-            "option": {
-              "defined": "WalletConfig"
-            }
-          }
         }
       ]
     },
@@ -672,59 +589,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "withdrawPendingFees",
-      "docs": [
-        "Admin withdraws USDC from pending fee reserve"
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "pool",
-          "isMut": true,
-          "isSigner": false,
-          "docs": [
-            "Pool state account"
-          ]
-        },
-        {
-          "name": "poolAuthority",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "adminUsdcAccount",
-          "isMut": true,
-          "isSigner": false,
-          "docs": [
-            "Admin's USDC token account"
-          ]
-        },
-        {
-          "name": "pendingFeeReserve",
-          "isMut": true,
-          "isSigner": false,
-          "docs": [
-            "Pending fee reserve PDA (holds 5% from user deposits)"
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
     }
   ],
   "accounts": [
@@ -844,26 +708,6 @@
               "PDA bump"
             ],
             "type": "u8"
-          },
-          {
-            "name": "walletConfig",
-            "type": {
-              "defined": "WalletConfig"
-            }
-          },
-          {
-            "name": "pendingFeeReserve",
-            "docs": [
-              "Pending fee reserve(PDA) - holds"
-            ],
-            "type": "publicKey"
-          },
-          {
-            "name": "totalPendingFees",
-            "docs": [
-              "Total pending fees accumulated"
-            ],
-            "type": "u64"
           }
         ]
       }
@@ -953,14 +797,6 @@
             "type": "u32"
           },
           {
-            "name": "navAllocationBps",
-            "docs": [
-              "NAV allocation in basis points (e.g., 9500 = 95%)",
-              "The remaining (10000 - nav_allocation_bps) goes to pending_fee_reserve"
-            ],
-            "type": "u16"
-          },
-          {
             "name": "poolName",
             "docs": [
               "Pool name (max 50 chars)"
@@ -1013,21 +849,6 @@
           },
           {
             "name": "WithdrawOnly"
-          }
-        ]
-      }
-    },
-    {
-      "name": "WalletConfig",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "navWallet",
-            "docs": [
-              "NAV Account - receives 95% of user deposit USDC"
-            ],
-            "type": "publicKey"
           }
         ]
       }
@@ -1220,36 +1041,6 @@
       ]
     },
     {
-      "name": "PendingFeesClaimed",
-      "fields": [
-        {
-          "name": "admin",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "pool",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "amount",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "remainingPendingFees",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "timestamp",
-          "type": "i64",
-          "index": false
-        }
-      ]
-    },
-    {
       "name": "PoolConfigUpdated",
       "fields": [
         {
@@ -1395,66 +1186,6 @@
       ]
     },
     {
-      "name": "UserDepositWithNav",
-      "fields": [
-        {
-          "name": "user",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "pool",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "grossUsdcAmount",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "navAmount",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "pendingFeeAmount",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "iptAmount",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "depositFee",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "exchangeRate",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "navAllocationBps",
-          "type": "u16",
-          "index": false
-        },
-        {
-          "name": "newIptSupply",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "timestamp",
-          "type": "i64",
-          "index": false
-        }
-      ]
-    },
-    {
       "name": "UserWithdrawalExecuted",
       "fields": [
         {
@@ -1540,61 +1271,6 @@
         {
           "name": "exchangeRate",
           "type": "u64",
-          "index": false
-        },
-        {
-          "name": "timestamp",
-          "type": "i64",
-          "index": false
-        }
-      ]
-    },
-    {
-      "name": "WalletsInitialized",
-      "fields": [
-        {
-          "name": "pool",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "admin",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "navWallet",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "pendingFeeReserve",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "timestamp",
-          "type": "i64",
-          "index": false
-        }
-      ]
-    },
-    {
-      "name": "WalletsUpdated",
-      "fields": [
-        {
-          "name": "pool",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "admin",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "navWallet",
-          "type": "publicKey",
           "index": false
         },
         {
@@ -1868,46 +1544,21 @@
     },
     {
       "code": 6036,
-      "name": "WalletsAlreadyInitialized",
-      "msg": "Wallets have already been initialized"
-    },
-    {
-      "code": 6037,
-      "name": "WalletsNotInitialized",
-      "msg": "Wallets have not been initialized yet"
-    },
-    {
-      "code": 6038,
-      "name": "InvalidWalletAddress",
-      "msg": "Invalid wallet address - cannot be default pubkey"
-    },
-    {
-      "code": 6039,
-      "name": "InvalidNavAllocation",
-      "msg": "Invalid NAV allocation - must be less than 10000 basis points"
-    },
-    {
-      "code": 6040,
-      "name": "InsufficientPendingFees",
-      "msg": "Insufficient pending fees"
-    },
-    {
-      "code": 6041,
       "name": "InvalidPoolName",
       "msg": "Invalid pool name"
     },
     {
-      "code": 6042,
+      "code": 6037,
       "name": "InvalidTokenSymbol",
       "msg": "Invalid token symbol"
     },
     {
-      "code": 6043,
+      "code": 6038,
       "name": "InvalidTargetAPY",
       "msg": "Invalid target APY"
     },
     {
-      "code": 6044,
+      "code": 6039,
       "name": "PoolAlreadyInitialized",
       "msg": "Pool with this ID already initialized"
     }

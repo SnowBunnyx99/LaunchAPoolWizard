@@ -6,7 +6,7 @@ import { useInitProgramSdk } from './useInitProgramSdk';
 // import { USDC_MINT } from '../sdk';
 
 export interface WalletContext {
-  publicKey: PublicKey | null;
+  publicKey: PublicKey | null | undefined;
   signTransaction: (tx: Transaction) => Promise<Transaction>;
   signAllTransactions?: (txs: Transaction[]) => Promise<Transaction[]>;
 }
@@ -58,22 +58,14 @@ export function useVoltActions(
     if (!poolPda) {
       throw new Error('Pool PDA is required');
     }
-
     if (amountDeposit <= 0) return;
-    const [pendingFeeReservePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("pending_fee_reserve"), poolPda.toBuffer()],
-      program.program.programId
-    );
-    const pendingFeeReserve = pendingFeeReservePda;
     setLoading(true);
-
     try {
       if (!sdk) {
         throw new Error('SDK not initialized');
       }
       const signature = await sdk.userDeposit(
         poolPda,
-        pendingFeeReserve,
         BigInt(amountDeposit * 10 ** USDC_DECIMALS),
       );
 
@@ -81,36 +73,27 @@ export function useVoltActions(
     } finally {
       setLoading(false);
     }
-  }, [amountDeposit, poolPda, sdk, program.program.programId]);
+  }, [amountDeposit, poolPda, sdk]);
 
   const withdraw = useCallback(async () => {
     if (!poolPda) {
       throw new Error('Pool PDA is required');
     }
-
     if (amountWithdraw <= 0) return;
-    const [usdcReservePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("usdc_reserve"), poolPda.toBuffer()],
-      program.program.programId
-    );
-    const poolUsdcReserve = usdcReservePda;
     setLoading(true);
-
     try {
       if (!sdk) {
         throw new Error('SDK not initialized');
       }
       const signature = await sdk.userWithdraw(
         poolPda,
-        poolUsdcReserve,
         Math.floor(amountWithdraw * 10 ** USDC_DECIMALS).toString(),
       );
-
       return signature;
     } finally {
       setLoading(false);
     }
-  }, [amountWithdraw, poolPda, sdk, program.program.programId]);
+  }, [amountWithdraw, poolPda, sdk]);
 
   // ✅ Optional: early return AFTER hooks
   if (!poolPda) {

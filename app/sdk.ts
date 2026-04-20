@@ -11,9 +11,10 @@ import { WalletContextState } from '@solana/wallet-adapter-react';
 import { PublicKey, Connection, SystemProgram, Transaction, SendTransactionError, TransactionInstruction } from '@solana/web3.js';
 import BN from 'bn.js';
 import { Pool } from './page';
-export const REFI_POOL_PROGRAM_ID = new PublicKey('DoCrin3rSc5wiPMaCSjBk3rN5RnswrDqNnghw6VVmf8m');
+import { toast } from 'react-toastify';
+export const REFI_POOL_PROGRAM_ID = new PublicKey('FmEbrWpM7JJX6a7LSDGCAqmKjpbzvNwBAH1rv1M5utji');
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-export const USDC_MINT = new PublicKey('7TrvqwZpZyRJM67YUW8U3bfx346rhdzBYM9vcyxqXcj5');
+export const USDC_MINT = new PublicKey('SYr5xP8c6A1uS33veGEJgposPxdpnUYAJZev6NkikP3');
 export const NAV_WALLET = new PublicKey('26TbGcvMErPNmihXtqa2ZCp7WvDhpthNeNnKFaUMJfuA');
 export const GENERATED_POOLS_KEY = new PublicKey('36uyNvFrV8B7b4Pg3d8Fs5QmLxDfRmCF4pef3dRcAAvf');
 export const USDC_DECIMALS = 6;
@@ -87,10 +88,24 @@ export const handleSolanaError = async (
       .map(l => l.match(/0x[0-9a-fA-F]+/)?.[0])
       .find(Boolean);
 
-    throw new Error(hex || 'UNKNOWN_ERROR');
+    console.log(err);
+    if (hex === '0x0') {
+      throw new Error('This Pool ID already existed');
+    }
+    throw new Error(hex || 'An Error has occured');
   }
 
   throw err;
+};
+
+export const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    console.log('Copied!');
+    toast.success('Copied to clipboard');
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
 };
 
 export const getPoolState = async (program: any, poolPda: PublicKey): Promise<Pool> => {
@@ -105,6 +120,13 @@ export const getPoolState = async (program: any, poolPda: PublicKey): Promise<Po
     })),
   };
 };
+
+export const toFixedBytes = (value: string, size: number): number[] => {
+  const bytes = Buffer.from(value, 'utf8');
+  const out = new Array(size).fill(0);
+  for (let i = 0; i < Math.min(bytes.length, size); i += 1) out[i] = bytes[i];
+  return out;
+}
 
 export const getFormattedPrice = (
   val = 0,
@@ -140,12 +162,7 @@ export const createRefiPoolSDK = ({
     }
   };
 
-  const toFixedBytes = (value: string, size: number): number[] => {
-    const bytes = Buffer.from(value, 'utf8');
-    const out = new Array(size).fill(0);
-    for (let i = 0; i < Math.min(bytes.length, size); i += 1) out[i] = bytes[i];
-    return out;
-  }
+
   const poolIdToSeed = (poolId: BN | number): Buffer => {
     const idBn = BN.isBN(poolId) ? poolId : new BN(poolId);
     const seed = Buffer.from(idBn.toArray('le', 8));
@@ -347,27 +364,27 @@ export const createRefiPoolSDK = ({
    * Net USDC is split: nav_allocation_bps % to NAV wallet, rest to pending_fee_reserve. IPT is minted to user.
    * Requires initWallets to have been called first.
    * @param navWalletUsdc - NAV wallet's USDC token account (owner = pool.wallet_config.nav_wallet)
-   * @param pendingFeeReserve - Pool's pending fee reserve token account (PDA)
+   * @param poolUsdcReserve - Pool's pending fee reserve token account (PDA)
    */
   const userDeposit = async (
     poolPda: PublicKey,
-    pendingFeeReserve: PublicKey,
     netUsdcAmount: bigint,
   ): Promise<string> => {
     try {
       if (!wallet?.publicKey) {
         throw new Error('Wallet not connected');
       }
-      const { ata: navWalletUsdc, ix: createNavAtaIx } = (
-        await getOrCreateTokenAccountIx(USDC_MINT, NAV_WALLET, wallet.publicKey)
-      );
 
+      const [usdcReservePda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("usdc_reserve"), poolPda.toBuffer()],
+        program.program.programId
+      );
+      const poolUsdcReserve = usdcReservePda;
       const iptMint = deriveIptMintPda(poolPda);
       const { ata: userUsdcAccount, ix: createUsdcAtaIx } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
       const { ata: userIptAccount, ix: createIptAtaIx } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
 
       const tx = new Transaction();
-      if (createNavAtaIx) tx.add(createNavAtaIx);
       if (createUsdcAtaIx) tx.add(createUsdcAtaIx);
       if (createIptAtaIx) tx.add(createIptAtaIx);
 
@@ -379,8 +396,7 @@ export const createRefiPoolSDK = ({
           poolAuthority: poolPda,
           userUsdcAccount: userUsdcAccount,
           userIptAccount: userIptAccount,
-          navWalletUsdc,
-          pendingFeeReserve,
+          poolUsdcReserve,
           iptMint,
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
@@ -402,7 +418,6 @@ export const createRefiPoolSDK = ({
    */
   const userWithdraw = async (
     poolPda: PublicKey,
-    poolUsdcReserve: PublicKey,
     withdrawIptAmount: string,
   ): Promise<string> => {
     try {
@@ -412,7 +427,11 @@ export const createRefiPoolSDK = ({
       const iptMint = deriveIptMintPda(poolPda);
       const { ata: userUsdcAccount, ix: createUsdcAtaIx } = await getOrCreateTokenAccountIx(USDC_MINT, wallet.publicKey, wallet.publicKey);
       const { ata: userIptAccount, ix: createIptAtaIx } = await getOrCreateTokenAccountIx(iptMint, wallet.publicKey, wallet.publicKey);
-
+      const [usdcReservePda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("usdc_reserve"), poolPda.toBuffer()],
+        program.program.programId
+      );
+      const poolUsdcReserve = usdcReservePda;
       const tx = new Transaction();
       if (createUsdcAtaIx) tx.add(createUsdcAtaIx);
       if (createIptAtaIx) tx.add(createIptAtaIx);

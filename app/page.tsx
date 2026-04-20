@@ -8,12 +8,11 @@ import CustomWalletBtn from './components/CustomWalletBtn';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
-import { getFormattedPrice, getPoolState, sleep, USDC_DECIMALS, USDC_MINT } from './sdk';
+import { sleep, toFixedBytes, USDC_MINT } from './sdk';
 import { toast } from 'react-toastify';
 import { useInitProgramVolt } from './hooks/useInitProgramVolt';
-import { useVoltActions } from './hooks/useVoltActions';
 import { useInitProgramSdk } from './hooks/useInitProgramSdk';
-import { formatUnits } from 'viem';
+import VoltDashboard from './components/VoltDashboard';
 
 export interface PoolConfig {
   adminAuthority: string;
@@ -62,56 +61,36 @@ export interface Pool {
 }
 
 export default function ReFiApp() {
-  const [poolAddress, setPoolAddress] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-
-    const data = localStorage.getItem('vaultDeployment');
-    if (!data) return null;
-
-    try {
-      const parsed = JSON.parse(data);
-      return parsed.vaultContractAddress || null;
-    } catch {
-      return null;
-    }
-  });
+  const [poolAddress, setPoolAddress] = useState<PublicKey | null | undefined>();
   const { initProgram } = useInitProgramVolt();
-  const [pool, setPool] = useState<Pool | null>(null);
-  const [loadingDeposit, setLoadingDeposit] = useState<boolean>(false);
-  const [loadingWithdraw, setLoadingWithdraw] = useState<boolean>(false);
   const { publicKey, signTransaction } = useWallet();
-
-  const poolPubkey = useMemo(() => {
-    if (!poolAddress) return null;
-    return new PublicKey(poolAddress);
-  }, [poolAddress]);
-
-  const actions = useVoltActions(
-    {
-      exchangeRate: 0,
-      withdrawFeeBPS: 0,
-    },
-    { publicKey, signTransaction: signTransaction || (async (tx) => tx) },
-    poolPubkey
-  );
-
   const program = useMemo(() => {
     return initProgram();
   }, []);
   const sdk = useInitProgramSdk(program, { publicKey, signTransaction: signTransaction || (async (tx) => tx) });
   const [step, setStep] = useState<1 | 2 | 'deploy'>(1);
   const [view, setView] = useState<'wizard' | 'dashboard' | null>(null);
-  const [depositBalance, setDepositBalance] = useState('0');
-  const [balanceVOLT, setBalanceVOLT] = useState('0');
+
   useEffect(() => {
-    const data = localStorage.getItem('vaultDeployment');
-    if (data) {
-      setView('dashboard');
+    if (typeof window === 'undefined' || !program) return;
+    try {
+      const data = localStorage.getItem('vaultDeployment');
+      if (!data){
+         setView('wizard');
+         return;
+      }
+      const parsed = JSON.parse(data);
+      const vaultContractAddress = parsed?.vaultContractAddress
+      if (vaultContractAddress) {
+        setPoolAddress(new PublicKey(vaultContractAddress));
+        console.log('called here')
+        setView('dashboard');
+      }
+    } catch (err) {
+      console.error('Error reading poolAddress from localStorage:', err);
     }
-    else {
-      setView('wizard');
-    }
-  }, []);
+  }, [program, sdk]);
+
   const [form, setForm] = useState({
     name: '',
     symbol: '',
@@ -119,13 +98,8 @@ export default function ReFiApp() {
     poolId: 1,
   });
 
-  const [signature, setSignature] = useState('');
   const [deploying, setDeploying] = useState(false);
 
-
-  // =====================
-  // DEPLOY
-  // =====================
   const handleDeploy = async () => {
     try {
       if (!publicKey) {
@@ -147,22 +121,21 @@ export default function ReFiApp() {
         maxTotalSupply: new BN(0), // Unlimited
         maxQueueSize: 20,
         navAllocationBps: 10000, // 100% to NAV
-        poolName: sdk.toFixedBytes(form.name, 50),
-        tokenSymbol: sdk.toFixedBytes(form.symbol, 10),
+        poolName: toFixedBytes(form.name, 50),
+        tokenSymbol: toFixedBytes(form.symbol, 10),
         targetApyBps: form.apy * 1000, // convert to bps
       }
 
       const { poolPda } = await sdk.initPool(USDC_MINT, form.poolId, config);
       console.log('Pool PDA:', poolPda);
-      setPoolAddress(poolPda.toString());
+      setPoolAddress(poolPda);
       await sleep(10000); // wait for transactions to confirm
       await sdk.initPoolStep2(USDC_MINT, poolPda);
 
-
-      const { sig } = await sdk.initWallets(
-        poolPda,
-      );
-      setSignature(sig);
+      //disable because we no longer need this step
+      // const { sig } = await sdk.initWallets(
+      //   poolPda,
+      // );
       setDeploying(false);
 
       const deployData = {
@@ -179,81 +152,6 @@ export default function ReFiApp() {
       setDeploying(false);
     }
   };
-  const fetchBalances = async () => {
-    if (sdk && poolAddress) {
-      const iptMint = sdk.deriveIptMintPda(new PublicKey(poolAddress));
-      const usdcBalance = await sdk.getTokenBalance(USDC_MINT);
-      const iptBalance = await sdk.getTokenBalance(iptMint);
-      setDepositBalance(formatUnits(BigInt(usdcBalance), USDC_DECIMALS));
-      setBalanceVOLT(formatUnits(BigInt(iptBalance), USDC_DECIMALS));
-      console.log(usdcBalance, iptBalance);
-    }
-  }
-  const onConfirmDeposit = async () => {
-    try {
-      setLoadingDeposit(true);
-      const sig = await actions.deposit(); // waits until tx is confirmed
-      if (sig) {
-        console.log('Deposit successful, signature:', sig);
-        toast.success('Deposit successfully!');
-        actions.setAmountDeposit(0);
-        await sleep(3000);
-        console.log('Start fetching balance');
-        fetchBalances();
-        fetchPoolState();
-      }
-    } catch (err: any) {
-
-      toast.error(`Deposit Failed!`);
-      console.error(err);
-    }
-    finally {
-      setLoadingDeposit(false);
-    }
-  };
-  const onConfirmWithdraw = async () => {
-    try {
-      setLoadingWithdraw(false);
-      const sig = await actions.withdraw(); // waits until tx is confirmed
-      if (sig) {
-        console.log('Withdraw successful, signature:', sig);
-        toast.success('Withdraw successfully!');
-        await sleep(3000);
-        console.log('Start fetching balance');
-        fetchBalances();
-        fetchPoolState();
-        actions.setAmountWithdraw(0);
-        setLoadingWithdraw(false);
-      }
-    } catch (err: any) {
-      toast.error(`Deposit Failed!`);
-      console.error(err);
-    }
-    finally {
-      setLoadingWithdraw(false);
-    }
-  };
-
-  const fetchPoolState = () => {
-    if (!poolAddress || !program) return;
-    getPoolState(program, new PublicKey(poolAddress)).then((data) => {
-      console.log('On-chain pool data:', data);
-      if (data) {
-        setPool(data);
-      }
-    }).catch((err) => {
-      console.error('Error fetching pool state:', err);
-    });
-  }
-  const bytesToString = (arr: number[]) => { return new TextDecoder().decode(new Uint8Array(arr)).replace(/\0/g, ''); }
-
-  useEffect(() => {
-    fetchPoolState();
-  }, [poolAddress])
-  useEffect(() => {
-    if (!pool || !poolPubkey) return;
-    fetchBalances();
-  }, [pool, poolPubkey])
 
   return (
     <div className="app">
@@ -432,14 +330,14 @@ export default function ReFiApp() {
                       </p>
 
                       <div className="font-mono text-[13px] bg-gray-100 px-4 py-2 rounded-md text-gray-500 inline-block my-2 border border-gray-200" style={{ padding: '10px' }}>
-                        {poolAddress || 'No address'}
+                        {poolAddress?.toString() || 'No address'}
                       </div>
 
                       <br />
 
                       <a
                         target='_blank'
-                        href={`https://solscan.io/tx/${signature}?cluster=devnet`}
+                        href={`https://solscan.io/address/${poolAddress?.toString()}?cluster=devnet`}
                         className="text-[12px] text-purple-500 no-underline"
                       >
                         View on Solana Explorer ↗
@@ -468,78 +366,8 @@ export default function ReFiApp() {
 
       {/* ===== DASHBOARD ===== */}
       {
-        view === 'dashboard' && pool && (
-          <div id="dashView" className="">
-
-
-            <div className="dh">
-              <div className="dt">
-                <div className="di"><svg height="18" viewBox="0 0 24 24" fill="none" stroke="#7C5CFC" ><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg></div>
-                <div>
-                  <div style={{ fontSize: '18px', fontWeight: '600' }} id="dashName">{bytesToString(pool.config.poolName)}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--gt)' }}>Yield pool on Solana</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <span className="badge bg">Live on devnet</span>
-                <span className="badge bpu" id="dashSym">{bytesToString(pool.config.tokenSymbol)}</span>
-              </div>
-            </div>
-
-            <div className="card" style={{ marginBottom: '14px' }}>
-              <div className="mg">
-                <div className="m"><div className="ml">Price per share</div><div className="mv" id="dPPS">${pool.config.initialExchangeRate ? (parseFloat(pool.config.initialExchangeRate.toString()) / 1e6).toFixed(4) : '0.0000'}</div></div>
-                <div className="m"><div className="ml">TVL</div><div className="mv" id="dTVL">$0.00</div></div>
-                <div className="m"><div className="ml">Target APY</div><div className="mv gr" id="dAPY">{pool.config.targetApyBps / 1000}%</div></div>
-                <div className="m"><div className="ml">Shares in circulation</div><div className="mv" id="dShares">{parseFloat(pool.totalIptSupply.toString()) / 10 ** USDC_DECIMALS}</div></div>
-              </div>
-
-              <div className="ag">
-                <div className="ac">
-                  <h4>Deposit USDC</h4>
-                  <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(depositBalance))} USDC</p>
-                  <div className="ai">
-                    <input type="number" id="depAmt" placeholder="Enter amount" min="0.01" step="0.01" value={actions.amountDeposit} onChange={(e) => actions.setAmountDeposit(parseFloat(e.target.value) || 0)} />
-                    <button
-                      className="ab d"
-                      onClick={onConfirmDeposit}
-                      disabled={loadingDeposit}
-                    >
-                      {loadingDeposit ? 'Processing...' : 'Deposit'}
-                    </button>
-                  </div>
-                  <div className="pt" id="depP">Enter amount to preview</div>
-                </div>
-                <div className="ac">
-                  <h4>Withdraw</h4>
-                  <p className='mb-4 text-sm'>Balance: {getFormattedPrice(parseFloat(balanceVOLT))} VOLT</p>
-                  <div className="ai">
-                    <input type="number" id="wdAmt" placeholder="Enter shares" min="0.01" step="0.01" value={actions.amountWithdraw} onChange={(e) => actions.setAmountWithdraw(parseFloat(e.target.value))} />
-                    <button disabled={loadingWithdraw} className="ab w" onClick={() => onConfirmWithdraw()}>
-                      {loadingWithdraw ? 'Processing...' : 'Withdraw'}
-                    </button>
-                  </div>
-                  <div className="pt" id="wdP">Enter shares to preview</div>
-                </div>
-              </div>
-
-
-              <div className="card" style={{ marginTop: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <div style={{ fontSize: '15px', fontWeight: '600' }}>Your position</div>
-                  {/* <span className="badge bgr" id="posL">No position</span> */}
-                </div>
-                <div className="fr3">
-                  <div className="m"><div className="ml">Your shares</div><div className="mv" id="uShares">
-                    {parseFloat(pool.totalIptSupply.toString()) / 10 ** USDC_DECIMALS}
-                  </div></div>
-                  <div className="m"><div className="ml">Current value</div><div className="mv" id="uVal">${pool.config.initialExchangeRate ? (parseFloat(pool.config.initialExchangeRate.toString()) / 1e6).toFixed(4) : '0.0000'}</div></div>
-                  <div className="m"><div className="ml">Gain / loss</div><div className="mv" id="uGain" style={{ color: 'var(--gl)' }}>+$0.00</div></div>
-                </div>
-              </div>
-
-            </div>
-          </div>
+        view === 'dashboard' && (
+          <VoltDashboard poolAddress={poolAddress} />
         )
       }
       {view === null && (

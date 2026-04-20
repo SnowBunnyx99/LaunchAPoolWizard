@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import type { NextConfig } from "next";
+// import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+const nextConfig = {
+  // ❌ Disable React Strict Mode (dev only behavior)
+  reactStrictMode: false,
+  // Optional: environment variables
+  env: {
+    NEXT_PUBLIC_APP_ENV: 'development',
+  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
