@@ -4,18 +4,18 @@ import { useState, useCallback, useMemo } from 'react';
 import { formatUnits } from 'viem';
 import { USDC_DECIMALS, USDC_MINT } from '../sdk';
 import { PublicKey } from '@solana/web3.js';
-import { WalletContext } from './useVoltActions';
+import { WalletContext } from './useTokenActions';
 import { useInitProgramSdk } from './useInitProgramSdk';
-import { useInitProgramVolt } from './useInitProgramVolt';
+import { useInitProgramToken } from './useInitProgramToken';
 
-export function useVoltBalances(walletCtx: WalletContext, poolPda: PublicKey | null) {
-  const { initProgram } = useInitProgramVolt();
+export function useTokenBalances(walletCtx: WalletContext, poolPda: PublicKey | null) {
+  const { initProgram } = useInitProgramToken();
   const program = useMemo(() => {
     return initProgram();
   }, []);
   const sdk = useInitProgramSdk(program, walletCtx);
   const [depositBalance, setDepositBalance] = useState('0');
-  const [balanceVOLT, setBalanceVOLT] = useState('0');
+  const [balanceTOKEN, setBalanceTOKEN] = useState('0');
   const [loading, setLoading] = useState(false);
 
   const fetchBalances = useCallback(async () => {
@@ -32,7 +32,7 @@ export function useVoltBalances(walletCtx: WalletContext, poolPda: PublicKey | n
         formatUnits(BigInt(usdcBalance), USDC_DECIMALS)
       );
 
-      setBalanceVOLT(
+      setBalanceTOKEN(
         formatUnits(BigInt(iptBalance), USDC_DECIMALS)
       );
     } catch (err) {
@@ -44,7 +44,7 @@ export function useVoltBalances(walletCtx: WalletContext, poolPda: PublicKey | n
 
   return {
     depositBalance,
-    balanceVOLT,
+    balanceTOKEN,
     fetchBalances,
     loading,
   };

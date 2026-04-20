@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { useState, useMemo, useCallback } from 'react';
-import { useInitProgramVolt } from './useInitProgramVolt';
+import { useInitProgramToken } from './useInitProgramToken';
 import { useInitProgramSdk } from './useInitProgramSdk';
 // import { USDC_MINT } from '../sdk';
 
@@ -15,14 +15,14 @@ export interface PoolContext {
   exchangeRate: number;   // already parsed
   withdrawFeeBPS: number;
 }
-export function useVoltActions(
+export function useTokenActions(
   poolCtx: PoolContext,
   walletCtx: WalletContext,
   poolPda: PublicKey | null
 ) {
   const USDC_DECIMALS = 6;
 
-  const program = useInitProgramVolt().initProgram();
+  const program = useInitProgramToken().initProgram();
   const sdk = useInitProgramSdk(program, walletCtx);
 
   const [amountDeposit, setAmountDeposit] = useState(0);

@@ -92,7 +92,7 @@ The **Pool Wizard** allows users to deploy a new pool via a guided UI.
 
 ---
 
-### 🔹 `useVoltActions`
+### 🔹 `useTokenActions`
 
 Handles:
 
@@ -121,12 +121,12 @@ Handles:
 
 ---
 
-### 🔹 `useVoltBalances`
+### 🔹 `useTokenBalances`
 
 Handles:
 
 * Fetching USDC balance
-* Fetching VOLT balance
+* Fetching TOKEN balance
 * Loading state
 
 #### Core Logic:
@@ -139,7 +139,7 @@ const fetchBalances = async () => {
   const iptBalance = await sdk.getTokenBalance(iptMint);
 
   setDepositBalance(...)
-  setBalanceVOLT(...)
+  setBalanceTOKEN(...)
 };
 ```
 
@@ -183,8 +183,8 @@ Displayed after deployment.
 ### Data Dependencies:
 
 * `poolAddress`
-* `useVoltBalances`
-* `useVoltActions`
+* `useTokenBalances`
+* `useTokenActions`
 
 ---
 
@@ -206,30 +206,6 @@ await actions.deposit()
 
 ---
 
-### ⚠️ Important Notes
-
-#### 1. RPC Delay
-
-* Blockchain state may not update instantly
-* Even after confirmation
-
-#### 2. Solution
-
-```ts
-await balances.fetchBalances()
-```
-
-Optionally retry:
-
-```ts
-for (let i = 0; i < 5; i++) {
-  await balances.fetchBalances();
-  await sleep(1500);
-}
-```
-
----
-
 ## 6. Withdraw Flow (Optional)
 
 Structure is similar to deposit:
@@ -248,7 +224,6 @@ The frontend interacts with a **custom Solana program** via SDK.
 
 * `initPool` → create pool
 * `initPoolStep2` → finalize setup
-* `initWallets` → initialize vaults
 * `userDeposit` → deposit funds
 * `userWithdraw` → withdraw funds
 

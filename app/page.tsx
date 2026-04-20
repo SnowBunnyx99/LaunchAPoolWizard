@@ -10,9 +10,9 @@ import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { sleep, toFixedBytes, USDC_MINT } from './sdk';
 import { toast } from 'react-toastify';
-import { useInitProgramVolt } from './hooks/useInitProgramVolt';
+import { useInitProgramToken } from './hooks/useInitProgramToken';
 import { useInitProgramSdk } from './hooks/useInitProgramSdk';
-import VoltDashboard from './components/VoltDashboard';
+import TokenDashboard from './components/TokenDashboard';
 
 export interface PoolConfig {
   adminAuthority: string;
@@ -62,7 +62,7 @@ export interface Pool {
 
 export default function ReFiApp() {
   const [poolAddress, setPoolAddress] = useState<PublicKey | null | undefined>();
-  const { initProgram } = useInitProgramVolt();
+  const { initProgram } = useInitProgramToken();
   const { publicKey, signTransaction } = useWallet();
   const program = useMemo(() => {
     return initProgram();
@@ -367,7 +367,7 @@ export default function ReFiApp() {
       {/* ===== DASHBOARD ===== */}
       {
         view === 'dashboard' && (
-          <VoltDashboard poolAddress={poolAddress} />
+          <TokenDashboard poolAddress={poolAddress} />
         )
       }
       {view === null && (

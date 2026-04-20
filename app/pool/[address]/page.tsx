@@ -3,7 +3,7 @@
 
 import { useParams } from 'next/navigation';
 import { PublicKey } from '@solana/web3.js';
-import VoltDashboard from '../../components/VoltDashboard'
+import TokenDashboard from '../../components/TokenDashboard'
 import CustomWalletBtn from '../../components/CustomWalletBtn'
 export default function PoolPage() {
   const params = useParams();
@@ -23,7 +23,7 @@ export default function PoolPage() {
 
         <CustomWalletBtn />
       </div>
-      {poolAddress ? <VoltDashboard poolAddress={poolAddress} /> : 'Invalid Pool Address'}
+      {poolAddress ? <TokenDashboard poolAddress={poolAddress} /> : 'Invalid Pool Address'}
     </div>
 
   );

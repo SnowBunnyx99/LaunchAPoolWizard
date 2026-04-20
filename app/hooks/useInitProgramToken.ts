@@ -3,11 +3,11 @@ import * as anchor from '@project-serum/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { useWallet } from '@solana/wallet-adapter-react';
 
-import idlDevNet from '@/app/volt/idl.json';
+import idlDevNet from '@/app/token/idl.json';
 import { REFI_POOL_PROGRAM_ID } from '../sdk';
 import { useSolanaConnection } from './useInitSolanaConnection';
 
-export function useInitProgramVolt() {
+export function useInitProgramToken() {
   const wallet = useWallet();
   const connection = useSolanaConnection();
   const initProgram = () => {

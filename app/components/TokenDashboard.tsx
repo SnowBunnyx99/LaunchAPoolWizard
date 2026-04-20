@@ -2,14 +2,14 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useInitProgramSdk } from '../hooks/useInitProgramSdk';
-import { useInitProgramVolt } from '../hooks/useInitProgramVolt';
+import { useInitProgramToken } from '../hooks/useInitProgramToken';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Pool } from '../page';
 import { PublicKey } from '@solana/web3.js';
 import { copyToClipboard, getFormattedPrice, getPoolState, sleep, USDC_DECIMALS, USDC_MINT } from '../sdk';
 import { formatUnits } from 'viem';
-import { useVoltActions } from '../hooks/useVoltActions';
 import { toast } from 'react-toastify';
+import { useTokenActions } from '../hooks/useTokenActions';
 type Props = {
   poolAddress: PublicKey | null | undefined;
 }
@@ -17,7 +17,7 @@ const IptDashboard: React.FC<Props> = ({
   poolAddress
 }) => {
   const { publicKey, signTransaction } = useWallet();
-  const { initProgram } = useInitProgramVolt();
+  const { initProgram } = useInitProgramToken();
 
   const program = useMemo(() => {
     return initProgram();
@@ -26,7 +26,7 @@ const IptDashboard: React.FC<Props> = ({
   const [loadingDeposit, setLoadingDeposit] = useState<boolean>(false);
   const [loadingWithdraw, setLoadingWithdraw] = useState<boolean>(false);
 
-  const actions = useVoltActions(
+  const actions = useTokenActions(
     {
       exchangeRate: 0,
       withdrawFeeBPS: 0,
@@ -37,7 +37,7 @@ const IptDashboard: React.FC<Props> = ({
   const [pool, setPool] = useState<Pool | null>(null);
   const [loadingPool, setLoadingPool] = useState(true);
   const [depositBalance, setDepositBalance] = useState('0');
-  const [balanceVOLT, setBalanceVOLT] = useState('0');
+  const [balanceTOKEN, setBalanceTOKEN] = useState('0');
   const bytesToString = (arr: number[]) => { return new TextDecoder().decode(new Uint8Array(arr)).replace(/\0/g, ''); }
 
   const fetchBalances = async () => {
@@ -46,7 +46,7 @@ const IptDashboard: React.FC<Props> = ({
       const usdcBalance = await sdk.getTokenBalance(USDC_MINT);
       const iptBalance = await sdk.getTokenBalance(iptMint);
       setDepositBalance(formatUnits(BigInt(usdcBalance), USDC_DECIMALS));
-      setBalanceVOLT(formatUnits(BigInt(iptBalance), USDC_DECIMALS));
+      setBalanceTOKEN(formatUnits(BigInt(iptBalance), USDC_DECIMALS));
       console.log(usdcBalance, iptBalance);
     }
   }
@@ -54,8 +54,6 @@ const IptDashboard: React.FC<Props> = ({
   useEffect(() => {
     if (typeof window === 'undefined' || !program) return;
     try {
-      const data = localStorage.getItem('vaultDeployment');
-      if (!data) return;
       const fetchPool = async (address: PublicKey) => {
         try {
           setLoadingPool(true);
@@ -84,6 +82,7 @@ const IptDashboard: React.FC<Props> = ({
 
   // ⛔ guard while loading
   if (loadingPool || !pool) {
+    console.log(pool);
     return (
       <div className="text-center py-12" id="dLoading">
         <div className="m-auto mt-5 w-10 h-10 border-2 border-gray-300 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
@@ -264,7 +263,7 @@ const IptDashboard: React.FC<Props> = ({
 
             <h4>Withdraw</h4>
             <p className="mb-4 text-sm">
-              Balance: {getFormattedPrice(parseFloat(balanceVOLT))} {bytesToString(pool.config.tokenSymbol)}
+              Balance: {getFormattedPrice(parseFloat(balanceTOKEN))} {bytesToString(pool.config.tokenSymbol)}
             </p>
             <div className="ai">
 
@@ -319,7 +318,7 @@ const IptDashboard: React.FC<Props> = ({
               <div className="ml">Your shares</div>
               <div className="mv" id="uShares">
 
-                {getFormattedPrice(parseFloat(balanceVOLT))}
+                {getFormattedPrice(parseFloat(balanceTOKEN))}
               </div>
             </div>
             <div className="m">
