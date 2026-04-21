@@ -58,7 +58,6 @@ The **Pool Wizard** allows users to deploy a new pool via a guided UI.
 
    * `initPool`
    * `initPoolStep2`
-   * `initWallets`
 
 3. On success:
 
@@ -121,35 +120,6 @@ Handles:
 
 ---
 
-### 🔹 `useTokenBalances`
-
-Handles:
-
-* Fetching USDC balance
-* Fetching TOKEN balance
-* Loading state
-
-#### Core Logic:
-
-```ts
-const fetchBalances = async () => {
-  if (!poolPda || !sdk) return;
-
-  const usdcBalance = await sdk.getTokenBalance(USDC_MINT);
-  const iptBalance = await sdk.getTokenBalance(iptMint);
-
-  setDepositBalance(...)
-  setBalanceTOKEN(...)
-};
-```
-
-#### Notes:
-
-* Must be manually triggered OR auto-triggered via `useEffect`
-* Requires valid `poolPda`
-
----
-
 ### 🔹 `useInitProgramSdk`
 
 Creates a memoized SDK instance.
@@ -170,7 +140,7 @@ Ensures consistent RPC reads.
 
 ---
 
-## 4. Pool Dashboard
+## 3. Pool Dashboard
 
 Displayed after deployment.
 
@@ -188,7 +158,7 @@ Displayed after deployment.
 
 ---
 
-## 5. Deposit Flow
+## 4. Deposit Flow
 
 ### Flow:
 
@@ -206,7 +176,7 @@ await actions.deposit()
 
 ---
 
-## 6. Withdraw Flow (Optional)
+## 5. Withdraw Flow (Optional)
 
 Structure is similar to deposit:
 
@@ -216,7 +186,7 @@ Structure is similar to deposit:
 
 ---
 
-## 7. Smart Contract Integration
+## 6. Smart Contract Integration
 
 The frontend interacts with a **custom Solana program** via SDK.
 
